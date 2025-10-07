@@ -3,12 +3,74 @@
   <head>
     <base target="_top">
     <?!= include('style'); ?>
+    
+    <style>
+      /* Style tambahan untuk Admin Panel dan Kustomisasi Tampilan */
+      .nav-tabs { 
+        display: flex; 
+        border-bottom: 1px solid #ddd; 
+        margin-bottom: 20px; 
+      }
+      .nav-tab { 
+        padding: 10px 20px; 
+        cursor: pointer; 
+        border: 1px solid transparent; 
+        border-bottom: none; 
+        margin-bottom: -1px; 
+      }
+      .nav-tab.active { 
+        border-color: #ddd; 
+        background-color: #fff; 
+        border-bottom: 1px solid #fff; 
+        border-radius: 6px 6px 0 0; 
+      }
+      .tab-content { display: none; }
+      .tab-content.active { display: block; }
+      
+      /* Style untuk Popup Modal Form */
+      .modal { 
+        display: none; position: fixed; z-index: 1000; 
+        left: 0; top: 0; width: 100%; height: 100%; 
+        overflow: auto; background-color: rgba(0,0,0,0.4); 
+      }
+      .modal-content { 
+        background-color: #fefefe; margin: 10% auto; padding: 25px; 
+        border: 1px solid #888; width: 80%; max-width: 500px; 
+        border-radius: 10px; 
+      }
+      .close-btn { 
+        color: #aaa; float: right; font-size: 28px; 
+        font-weight: bold; cursor: pointer; 
+      }
+      
+      /* Style untuk baris hari libur dan Minggu */
+      .holiday-row, .sunday-row {
+        background-color: #fee2e2; /* Warna merah muda */
+        color: #991b1b; /* Warna teks merah tua */
+      }
+      .holiday-row td, .sunday-row td {
+        font-weight: 500;
+      }
+      .holiday-row td[colspan="3"], .sunday-row td[colspan="3"] {
+        text-align: left;
+        padding-left: 8px;
+      }
+      
+      /* Style untuk form input hari libur di admin panel */
+      .holiday-input-row { 
+        display: flex; gap: 10px; 
+        align-items: center; margin-bottom: 8px; 
+      }
+      .holiday-input-row input[type="date"] { width: 150px; }
+      .holiday-input-row input[type="text"] { flex-grow: 1; }
+    </style>
   </head>
   <body>
     <div class="container">
+    
       <div id="login-container">
-        <div class="card">
-          <h2>🔐 Ceklok Guru</h2>
+         <div class="card">
+          <h2>🔐 Ceklok Guru & Admin</h2>
           <p>Silakan login untuk melanjutkan</p>
           <div class="input-group">
             <label for="email">Email</label>
@@ -26,36 +88,89 @@
       <div id="dashboard-container" style="display:none;">
         <div class="card">
           <h2 id="welcome-message"></h2>
-          
+          <div id="global-lock-message" class="message" style="color: #b91c1c; margin-bottom: 15px;"></div>
           <div class="month-navigator">
             <button onclick="changeMonth(-1)">&#9664; Bulan Lalu</button>
             <h3 id="month-display"></h3>
             <button onclick="changeMonth(1)">Bulan Depan &#9654;</button>
           </div>
-
-          <div id="attendance-table-container">
-             </div>
-
-          <button onclick="handleSave()">Simpan Semua Perubahan</button>
+          <div id="attendance-table-container"></div>
+          <button id="save-button" onclick="handleSave()">Simpan Semua Perubahan</button>
           <button class="logout" onclick="handleLogout()">Logout</button>
           <p id="save-message" class="message"></p>
         </div>
       </div>
+      
+      <div id="admin-container" style="display:none;">
+          <div class="card">
+              <h2 id="admin-welcome-message"></h2>
+              <div class="nav-tabs">
+                  <div class="nav-tab active" onclick="openTab(event, 'kelola-akun')">Kelola Akun</div>
+                  <div class="nav-tab" onclick="openTab(event, 'pengaturan')">Pengaturan</div>
+              </div>
+              
+              <div id="kelola-akun" class="tab-content active">
+                  <h3>Daftar Akun Guru</h3>
+                  <button onclick="openUserForm()">+ Tambah Akun Baru</button>
+                  <div id="user-table-container" style="margin-top: 15px;"></div>
+              </div>
 
+              <div id="pengaturan" class="tab-content">
+                  <h3>Kunci Absensi</h3>
+                  <div class="input-group">
+                      <label for="locked-months">Masukkan bulan yang dikunci (pisahkan koma, format: YYYY-MM)</label>
+                      <input type="text" id="locked-months" placeholder="Contoh: 2024-08,2024-12">
+                      <button onclick="saveLockedMonthsSettings()" style="width: auto; margin-top: 10px;">Simpan Bulan Terkunci</button>
+                      <p id="locked-months-message" class="message"></p>
+                  </div>
+                  <hr style="margin: 25px 0;">
+                  <h3>Hari Libur Nasional</h3>
+                  <div id="holidays-container"></div>
+                  <button onclick="addHolidayRow()" style="width: auto;">+ Tambah Hari Libur</button>
+                  <button onclick="saveHolidaysSettings()" style="width: auto; margin-top: 20px;">Simpan Semua Hari Libur</button>
+                  <p id="holidays-message" class="message"></p>
+              </div>
+
+              <button class="logout" onclick="handleLogout()">Logout</button>
+          </div>
+      </div>
+    </div>
+    
+    <div id="user-form-modal" class="modal">
+         <div class="modal-content">
+        <span class="close-btn" onclick="closeUserForm()">&times;</span>
+        <h3 id="form-title">Tambah Akun Baru</h3>
+        <input type="hidden" id="original-email">
+        <div class="input-group"> <label for="user-email">Email</label> <input type="email" id="user-email"> </div>
+        <div class="input-group"> <label for="user-password">Password</label> <input type="text" id="user-password"> </div>
+        <div class="input-group"> <label for="user-name">Nama Lengkap</label> <input type="text" id="user-name"> </div>
+        <div class="input-group"> <label for="user-school">Sekolah</label> <input type="text" id="user-school"> </div>
+        <div class="input-group"> <label for="user-role">Peran</label> <select id="user-role"><option value="guru">Guru</option><option value="admin">Admin</option></select> </div>
+        <button onclick="handleUserSave()">Simpan</button>
+        <p id="user-form-message" class="message"></p>
+      </div>
     </div>
     
     <script>
+      // --- Variabel Global ---
       let currentUser = null;
       let currentDate = new Date();
+      let appSettings = { lockedMonths: [], holidays: {} };
 
+      // --- Inisialisasi & Otentikasi ---
+      
       document.addEventListener('DOMContentLoaded', () => {
         const userSession = sessionStorage.getItem('ceklokUser');
         if (userSession) {
           currentUser = JSON.parse(userSession);
-          showDashboard(currentUser);
+          if (currentUser.role === 'admin') {
+            showAdminDashboard(currentUser);
+          } else {
+            showDashboard(currentUser);
+          }
         }
       });
-
+      
       function handleLogin() {
         const email = document.getElementById("email").value;
         const password = document.getElementById("password").value;
@@ -66,100 +181,131 @@
         }
         button.disabled = true;
         button.textContent = "Mencoba Login...";
-        document.getElementById('login-message').innerText = "";
-        google.script.run.withSuccessHandler(response => {
+        google.script.run
+          .withSuccessHandler(response => {
             if (response.status === "success") {
               sessionStorage.setItem('ceklokUser', JSON.stringify(response));
               currentUser = response;
-              showDashboard(response);
+              if (response.role === 'admin') {
+                showAdminDashboard(response);
+              } else {
+                showDashboard(response);
+              }
             } else {
               document.getElementById('login-message').innerText = response.message;
               button.disabled = false;
               button.textContent = "Login";
             }
-          }).withFailureHandler(error => {
+          })
+          .withFailureHandler(error => {
             document.getElementById('login-message').innerText = "Error: " + error.message;
             button.disabled = false;
             button.textContent = "Login";
-          }).userLogin(email, password);
+          })
+          .userLogin(email, password);
       }
+
+      function handleLogout() {
+        sessionStorage.removeItem('ceklokUser');
+        currentUser = null;
+        currentDate = new Date();
+        document.getElementById("login-container").style.display = "block";
+        document.getElementById("dashboard-container").style.display = "none";
+        document.getElementById("admin-container").style.display = "none";
+        document.getElementById('email').value = "";
+        document.getElementById('password').value = "";
+        document.getElementById('login-message').innerText = "Anda berhasil logout.";
+      }
+      
+      // --- Logika untuk Dashboard Guru ---
 
       function showDashboard(userData) {
         document.getElementById("login-container").style.display = "none";
+        document.getElementById("admin-container").style.display = "none";
         document.getElementById("dashboard-container").style.display = "block";
         document.getElementById("welcome-message").innerHTML = `Halo, <strong>${userData.name}</strong><br><small>${userData.school}</small>`;
         loadAttendanceForMonth(currentDate);
       }
-
+      
       function loadAttendanceForMonth(date) {
         const year = date.getFullYear();
         const month = date.getMonth() + 1;
         document.getElementById('month-display').innerText = date.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
-        const container = document.getElementById('attendance-table-container');
-        container.innerHTML = '<div class="spinner">Memuat data...</div>';
-        generateMonthTable(year, month);
+        document.getElementById('attendance-table-container').innerHTML = '<div class="spinner">Memuat data...</div>';
+        
         google.script.run
-          .withSuccessHandler(attendanceData => {
-            populateAttendanceData(attendanceData);
+          .withSuccessHandler(response => {
+            appSettings = {
+              lockedMonths: response.lockedMonths || [],
+              holidays: response.holidays || {}
+            };
+            generateMonthTable(year, month, response.attendance);
           })
-          .getMonthlyAttendance(currentUser.email, year, month);
+          .getAppSettingsForUser(currentUser.email, year, month);
       }
 
-      function generateMonthTable(year, month) {
+      function generateMonthTable(year, month, attendanceData) {
         const container = document.getElementById('attendance-table-container');
         const daysInMonth = new Date(year, month, 0).getDate();
+        const currentMonthStr = `${year}-${String(month).padStart(2, '0')}`;
+        const isMonthLocked = appSettings.lockedMonths.includes(currentMonthStr);
         
-        let tableHTML = '<table><thead><tr><th>Tanggal</th><th>Jam Masuk</th><th>Jam Pulang</th><th>Alasan</th><th>Aksi</th></tr></thead><tbody>';
+        document.getElementById('global-lock-message').innerText = isMonthLocked ? 'Absensi untuk bulan ini telah dikunci oleh Admin.' : '';
+        document.getElementById('save-button').disabled = isMonthLocked;
+        
+        let tableHTML = '<table><thead><tr><th>Tanggal</th><th>Jam Masuk</th><th>Jam Pulang</th><th>Keterangan</th><th>Aksi</th></tr></thead><tbody>';
         
         for (let day = 1; day <= daysInMonth; day++) {
-          const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          const dateStr = `${currentMonthStr}-${String(day).padStart(2, '0')}`;
           const dateObj = new Date(year, month - 1, day);
           const dayName = dateObj.toLocaleDateString('id-ID', { weekday: 'short' });
           const isSunday = dateObj.getDay() === 0;
-          const rowClass = isSunday ? 'class="sunday-row"' : '';
-          const isDisabled = isSunday ? 'disabled' : '';
+          const isHoliday = !!appSettings.holidays[dateStr];
 
-          tableHTML += `<tr id="row-${dateStr}" ${rowClass}>
-            <td>${day} <small>(${dayName})</small></td>
-            <td><input type="time" id="in-${dateStr}" ${isDisabled}></td>
-            <td><input type="time" id="out-${dateStr}" ${isDisabled}></td>
-            <td>
-              <select id="reason-${dateStr}" ${isDisabled} onchange="handleReasonChange(event)">
-                <option value="">-- Pilih Alasan --</option>
-                <option value="Hari Libur Sekolah">Hari Libur Sekolah</option>
-                <option value="Cuti Tahunan">Cuti Tahunan</option>
-                <option value="Cuti Bersalin (Anak Pertama s.d Ketiga)">Cuti Bersalin (Anak Pertama s.d Ketiga)</option>
-                <option value="Cuti Bersalin (Anak Keempat dst) Bulan Pertama">Cuti Bersalin (Anak Keempat dst) Bulan Pertama</option>
-                <option value="Cuti Bersalin (Anak Keempat dst) Bulan Kedua">Cuti Bersalin (Anak Keempat dst) Bulan Kedua</option>
-                <option value="Cuti Bersalin (Anak Keempat dst) Bulan Ketiga">Cuti Bersalin (Anak Keempat dst) Bulan Ketiga</option>
-                <option value="Cuti Besar Bulan Pertama">Cuti Besar Bulan Pertama</option>
-                <option value="Cuti Besar Bulan Kedua">Cuti Besar Bulan Kedua</option>
-                <option value="Cuti Besar Bulan Ketiga">Cuti Besar Bulan Ketiga</option>
-                <option value="Izin Tugas belajar">Izin Tugas belajar</option>
-                <option value="Izin Alasan Penting (1 s.d 2 Hari)">Izin Alasan Penting (1 s.d 2 Hari)</option>
-                <option value="Izin Alasan Penting (Lebih dari 2 Hari)">Izin Alasan Penting (Lebih dari 2 Hari)</option>
-                <option value="Izin Sakit (1 hari Sampai Dengan 14 Hari)">Izin Sakit (1 hari Sampai Dengan 14 Hari)</option>
-                <option value="Izin Sakit (Lebih dari 14 Hari Sampai Dengan 12 Bulan)">Izin Sakit (Lebih dari 14 Hari Sampai Dengan 12 Bulan)</option>
-                <option value="Izin Sakit (Lebih dari 12 Bulan Sampai Dengan 18 Bulan)">Izin Sakit (Lebih dari 12 Bulan Sampai Dengan 18 Bulan)</option>
-                <option value="Dinas Luar">Dinas Luar</option>
-              </select>
-            </td>
-            <td><button class="clear-btn" onclick="handleClearRow(event)" ${isDisabled}>Hapus</button></td>
-          </tr>`;
+          if (isHoliday) {
+            const holidayDescription = appSettings.holidays[dateStr];
+            tableHTML += `<tr id="row-${dateStr}" class="holiday-row">
+              <td>${day} <small>(${dayName})</small></td>
+              <td colspan="3">${holidayDescription}</td>
+              <td></td>
+            </tr>`;
+          } else if (isSunday) {
+            tableHTML += `<tr id="row-${dateStr}" class="sunday-row">
+              <td>${day} <small>(${dayName})</small></td>
+              <td colspan="3">Hari Libur</td>
+              <td></td>
+            </tr>`;
+          } else {
+            const isDisabled = isMonthLocked;
+            tableHTML += `<tr id="row-${dateStr}">
+              <td>${day} <small>(${dayName})</small></td>
+              <td><input type="time" id="in-${dateStr}" ${isDisabled ? 'disabled' : ''}></td>
+              <td><input type="time" id="out-${dateStr}" ${isDisabled ? 'disabled' : ''}></td>
+              <td>
+                <select id="reason-${dateStr}" ${isDisabled ? 'disabled' : ''} onchange="handleReasonChange(event)">
+                  <option value="">-- Pilih Alasan --</option>
+                  <option value="Hari Libur Sekolah">Hari Libur Sekolah</option>
+                  <option value="Cuti Tahunan">Cuti Tahunan</option>
+                  <option value="Dinas Luar">Dinas Luar</option>
+                </select>
+              </td>
+              <td><button class="clear-btn" onclick="handleClearRow(event)" ${isDisabled ? 'disabled' : ''}>Hapus</button></td>
+            </tr>`;
+          }
         }
         tableHTML += '</tbody></table>';
         container.innerHTML = tableHTML;
+        populateAttendanceData(attendanceData);
       }
       
       function populateAttendanceData(data) {
-        for(const date in data) {
+        for (const date in data) {
           const checkInInput = document.getElementById(`in-${date}`);
           const checkOutInput = document.getElementById(`out-${date}`);
           const reasonSelect = document.getElementById(`reason-${date}`);
-          
-          if(checkInInput) checkInInput.value = data[date].checkIn;
-          if(checkOutInput) checkOutInput.value = data[date].checkOut;
-          if(reasonSelect) {
+          if (checkInInput) checkInInput.value = data[date].checkIn;
+          if (checkOutInput) checkOutInput.value = data[date].checkOut;
+          if (reasonSelect) {
             reasonSelect.value = data[date].reason || "";
             if (data[date].reason) {
               if (checkInInput) checkInInput.disabled = true;
@@ -168,88 +314,192 @@
           }
         }
       }
-      
+
       function handleReasonChange(event) {
         const selectElement = event.target;
         const hasReason = selectElement.value !== "";
         const row = selectElement.closest('tr');
         const timeInputs = row.querySelectorAll('input[type="time"]');
-
         timeInputs.forEach(input => {
           input.disabled = hasReason;
-          if (hasReason) {
-            input.value = '';
-          }
+          if (hasReason) input.value = '';
         });
       }
 
       function handleClearRow(event) {
-        event.preventDefault(); 
+        event.preventDefault();
         const row = event.target.closest('tr');
         const timeInputs = row.querySelectorAll('input[type="time"]');
         const reasonSelect = row.querySelector('select');
-        
         timeInputs.forEach(input => {
           input.value = '';
-          input.disabled = false; 
+          input.disabled = false;
         });
-        
-        if (reasonSelect) {
-          reasonSelect.value = '';
-        }
+        if (reasonSelect) reasonSelect.value = '';
       }
-
+      
       function changeMonth(direction) {
         currentDate.setMonth(currentDate.getMonth() + direction);
         loadAttendanceForMonth(currentDate);
       }
-
+      
       function handleSave() {
         const button = event.target;
         button.disabled = true;
         button.textContent = "Menyimpan...";
         document.getElementById('save-message').innerText = "";
-        const attendancePayload = {
-            email: currentUser.email,
-            name: currentUser.name,
-            school: currentUser.school,
-            attendance: {}
-        };
+        const payload = { email: currentUser.email, name: currentUser.name, school: currentUser.school, attendance: {} };
         const rows = document.querySelectorAll('#attendance-table-container tbody tr');
         rows.forEach(row => {
           const date = row.id.replace('row-', '');
-          const checkIn = row.querySelector('td:nth-child(2) input').value;
-          const checkOut = row.querySelector('td:nth-child(3) input').value;
-          const reason = row.querySelector('td:nth-child(4) select').value;
-          
-          // --- INILAH PERUBAIKANNYA ---
-          // Hapus kondisi 'if', sehingga data kosong pun akan dikirim.
-          attendancePayload.attendance[date] = { checkIn, checkOut, reason };
+          const checkIn = row.querySelector('td:nth-child(2) input')?.value;
+          const checkOut = row.querySelector('td:nth-child(3) input')?.value;
+          const reason = row.querySelector('td:nth-child(4) select')?.value;
+          if (checkIn || checkOut || reason) {
+            payload.attendance[date] = { checkIn: checkIn || "", checkOut: checkOut || "", reason: reason || "" };
+          }
         });
-
         google.script.run
-          .withSuccessHandler(response => {
-            document.getElementById('save-message').innerText = response.message;
+          .withSuccessHandler(r => {
+            document.getElementById('save-message').innerText = r.message;
             button.disabled = false;
             button.textContent = "Simpan Semua Perubahan";
           })
-          .withFailureHandler(error => {
-            document.getElementById('save-message').innerText = "Error: " + error.message;
+          .withFailureHandler(e => {
+            document.getElementById('save-message').innerText = "Error: " + e.message;
             button.disabled = false;
             button.textContent = "Simpan Semua Perubahan";
           })
-          .saveMonthlyAttendance(attendancePayload);
+          .saveMonthlyAttendance(payload);
+      }
+
+      // --- Logika untuk Panel Admin ---
+
+      function showAdminDashboard(userData) {
+        document.getElementById("login-container").style.display = "none";
+        document.getElementById("dashboard-container").style.display = "none";
+        document.getElementById("admin-container").style.display = "block";
+        document.getElementById("admin-welcome-message").innerHTML = `Halo Admin, <strong>${userData.name}</strong>`;
+        loadUsers();
+        loadAdminSettings();
       }
       
-      function handleLogout() {
-        sessionStorage.removeItem('ceklokUser');
-        currentUser = null;
-        currentDate = new Date();
-        document.getElementById("login-container").style.display = "block";
-        document.getElementById("dashboard-container").style.display = "none";
-        document.getElementById('email').value = "";
-        document.getElementById('password').value = "";
-        document.getElementById('login-message').innerText = "Anda berhasil logout.";
+      // Admin: Manajemen Akun
+      function loadUsers() {
+        document.getElementById('user-table-container').innerHTML = '<div class="spinner">Memuat...</div>';
+        google.script.run.withSuccessHandler(renderUserTable).getUsers(currentUser.email);
+      }
+      
+      function renderUserTable(users) {
+        const container = document.getElementById('user-table-container');
+        let tableHTML = '<table><thead><tr><th>Email</th><th>Nama</th><th>Sekolah</th><th>Peran</th><th>Aksi</th></tr></thead><tbody>';
+        if (users && users.length > 0) {
+          users.forEach(user => {
+            const userStr = JSON.stringify(user).replace(/'/g, "&apos;").replace(/"/g, "&quot;");
+            tableHTML += `<tr><td>${user.email}</td><td>${user.name}</td><td>${user.school}</td><td>${user.role}</td><td><button onclick='openUserForm(${userStr})'>Edit</button><button class="clear-btn" onclick="handleUserDelete('${user.email}')">Hapus</button></td></tr>`;
+          });
+        } else {
+          tableHTML += `<tr><td colspan="5">Tidak ada data akun.</td></tr>`;
+        }
+        tableHTML += '</tbody></table>';
+        container.innerHTML = tableHTML;
+      }
+
+      function openUserForm(user = null) {
+        const modal = document.getElementById('user-form-modal');
+        document.getElementById('user-form-message').innerText = "";
+        document.getElementById('original-email').value = user ? user.email : '';
+        document.getElementById('user-email').value = user ? user.email : '';
+        document.getElementById('user-password').value = user ? user.password : '';
+        document.getElementById('user-name').value = user ? user.name : '';
+        document.getElementById('user-school').value = user ? user.school : '';
+        document.getElementById('user-role').value = user ? user.role : 'guru';
+        document.getElementById('form-title').innerText = user ? 'Edit Akun' : 'Tambah Akun Baru';
+        document.getElementById('user-email').disabled = !!user;
+        modal.style.display = 'block';
+      }
+
+      function closeUserForm() {
+        document.getElementById('user-form-modal').style.display = 'none';
+      }
+      
+      function handleUserSave() {
+        const userData = {
+          originalEmail: document.getElementById('original-email').value,
+          email: document.getElementById('user-email').value,
+          password: document.getElementById('user-password').value,
+          name: document.getElementById('user-name').value,
+          school: document.getElementById('user-school').value,
+          role: document.getElementById('user-role').value
+        };
+        const apiCall = userData.originalEmail ? 'updateUser' : 'addUser';
+        google.script.run
+          .withSuccessHandler(r => { if (r.status === 'success') { closeUserForm(); loadUsers(); }})
+          [apiCall](currentUser.email, userData);
+      }
+
+      function handleUserDelete(email) {
+        if (confirm(`Yakin ingin menghapus akun ${email}?`)) {
+          google.script.run
+            .withSuccessHandler(r => { if (r.status === 'success') loadUsers(); })
+            .deleteUser(currentUser.email, email);
+        }
+      }
+
+      // Admin: Pengaturan Aplikasi
+      function loadAdminSettings() {
+        google.script.run.withSuccessHandler(settings => {
+          document.getElementById('locked-months').value = settings.lockedMonths.join(',');
+          const holidaysContainer = document.getElementById('holidays-container');
+          holidaysContainer.innerHTML = '';
+          if (settings.holidays && settings.holidays.length > 0) {
+            settings.holidays.forEach(h => addHolidayRow(h.date, h.description));
+          }
+        }).getSettings(currentUser.email);
+      }
+
+      function addHolidayRow(date = '', description = '') {
+        const container = document.getElementById('holidays-container');
+        const newRow = document.createElement('div');
+        newRow.className = 'holiday-input-row';
+        newRow.innerHTML = `<input type="date" value="${date}"><input type="text" placeholder="Keterangan Hari Libur" value="${description}"><button class="clear-btn" onclick="this.parentElement.remove()">X</button>`;
+        container.appendChild(newRow);
+      }
+      
+      function saveLockedMonthsSettings() {
+        const input = document.getElementById('locked-months').value;
+        const months = input.split(',').map(s => s.trim()).filter(Boolean);
+        const msgElem = document.getElementById('locked-months-message');
+        msgElem.innerText = 'Menyimpan...';
+        google.script.run.withSuccessHandler(r => { msgElem.innerText = r.message; }).saveLockedMonths(currentUser.email, months);
+      }
+      
+      function saveHolidaysSettings() {
+        const rows = document.querySelectorAll('#holidays-container .holiday-input-row');
+        const holidays = [];
+        rows.forEach(row => {
+          const date = row.querySelector('input[type="date"]').value;
+          const description = row.querySelector('input[type="text"]').value;
+          if (date && description) holidays.push({ date, description });
+        });
+        const msgElem = document.getElementById('holidays-message');
+        msgElem.innerText = 'Menyimpan...';
+        google.script.run.withSuccessHandler(r => { msgElem.innerText = r.message; }).saveHolidays(currentUser.email, holidays);
+      }
+
+      // --- Utilitas ---
+      function openTab(evt, tabName) {
+        let i, tabcontent, tablinks;
+        tabcontent = document.getElementsByClassName("tab-content");
+        for (i = 0; i < tabcontent.length; i++) {
+          tabcontent[i].style.display = "none";
+        }
+        tablinks = document.getElementsByClassName("nav-tab");
+        for (i = 0; i < tablinks.length; i++) {
+          tablinks[i].className = tablinks[i].className.replace(" active", "");
+        }
+        document.getElementById(tabName).style.display = "block";
+        evt.currentTarget.className += " active";
       }
     </script>
   </body>
