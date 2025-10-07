@@ -1,0 +1,162 @@
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
+  
+  body {
+    font-family: 'Poppins', sans-serif;
+    background-color: #f0f2f5;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start; /* Ubah ke flex-start */
+    min-height: 100vh;
+    margin: 0;
+    padding-top: 2rem; /* Tambah padding atas */
+    color: #333;
+  }
+  .container {
+    width: 100%;
+    max-width: 500px; /* Lebarkan container */
+    padding: 20px;
+  }
+  .card {
+    background-color: white;
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    text-align: center;
+  }
+  h2 {
+    margin-top: 0;
+    color: #1e3a8a; /* Dark Blue */
+  }
+  p {
+    color: #666;
+    margin-bottom: 24px;
+  }
+  .input-group {
+    margin-bottom: 16px;
+    text-align: left;
+  }
+  .input-group label {
+    display: block;
+    font-weight: 500;
+    margin-bottom: 6px;
+    font-size: 14px;
+  }
+  input[type="email"], input[type="password"] {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    box-sizing: border-box;
+    font-family: 'Poppins', sans-serif;
+  }
+  button {
+    width: 100%;
+    padding: 12px;
+    background-color: #2563eb; /* Blue */
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.3s;
+  }
+  button:disabled {
+    background-color: #9ca3af;
+    cursor: not-allowed;
+  }
+  button:hover:not(:disabled) {
+    background-color: #1d4ed8; /* Darker Blue */
+  }
+  button.logout {
+    background-color: #dc2626; /* Red */
+    margin-top: 10px;
+  }
+  button.logout:hover:not(:disabled) {
+    background-color: #b91c1c; /* Darker Red */
+  }
+  .message {
+    margin-top: 16px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #dc2626; /* Red for errors */
+  }
+  #save-message {
+    color: #16a34a; /* Green for success */
+  }
+  #welcome-message small {
+    font-weight: normal;
+    color: #555;
+  }
+
+  /* === STYLE BARU UNTUK ABSENSI BULANAN === */
+  .month-navigator {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+  .month-navigator button {
+    width: auto;
+    padding: 8px 12px;
+    font-size: 14px;
+    background-color: #e5e7eb;
+    color: #374151;
+  }
+  .month-navigator h3 {
+    margin: 0;
+    color: #1e3a8a;
+  }
+  #attendance-table-container {
+    max-height: 40vh; /* Batasi tinggi tabel */
+    overflow-y: auto; /* Tambah scroll jika tabel panjang */
+    margin-bottom: 20px;
+    border: 1px solid #eee;
+    border-radius: 8px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+  th, td {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid #eee;
+  }
+  th {
+    background-color: #f9fafb;
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+  }
+  td small {
+    color: #6b7280;
+  }
+  tr:last-child td {
+    border-bottom: none;
+  }
+  input[type="time"] {
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 6px;
+    font-family: 'Poppins', sans-serif;
+    width: 100px;
+  }
+  .spinner {
+    padding: 40px;
+    text-align: center;
+    color: #666;
+  }
+  /* === STYLE BARU UNTUK HARI MINGGU === */
+  .sunday-row {
+    background-color: #f3f4f6; /* Warna abu-abu muda */
+    color: #9ca3af; /* Warna teks lebih redup */
+  }
+  .sunday-row input[type="time"] {
+    background-color: #e5e7eb;
+    border-color: #d1d5db;
+    cursor: not-allowed;
+  }
+</style>
