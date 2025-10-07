@@ -6,7 +6,6 @@
  */
 
 // --- KONFIGURASI GLOBAL ---
-// Ganti dengan ID Google Sheet Anda
 const SPREADSHEET_ID = "1EIQY1DeGcwhEaYojbGMah-S5HbtsrON5YRy37bl_vLg"; 
 
 const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -14,6 +13,7 @@ const usersSheet = ss.getSheetByName("Users");
 const attendanceSheet = ss.getSheetByName("Attendance");
 const settingsSheet = ss.getSheetByName("Settings");
 const holidaysSheet = ss.getSheetByName("Holidays");
+const announcementsSheet = ss.getSheetByName("Announcements");
 
 // --- FUNGSI UTAMA & TAMPILAN ---
 
@@ -29,16 +29,10 @@ function include(filename) {
 
 // --- FUNGSI KEAMANAN & OTENTIKASI ---
 
-/**
- * Mengecek apakah seorang pengguna adalah admin berdasarkan email.
- * @param {string} email - Email pengguna yang akan dicek.
- * @returns {boolean} - True jika admin, false jika bukan.
- */
 function checkIfAdmin(email) {
   if (!email) return false;
   const users = usersSheet.getDataRange().getValues();
   for (let i = 1; i < users.length; i++) {
-    // Kolom E (indeks 4) adalah kolom 'Role'
     if (users[i][0].toLowerCase() === email.toLowerCase()) {
       return users[i][4] === 'admin';
     }
@@ -46,12 +40,6 @@ function checkIfAdmin(email) {
   return false;
 }
 
-/**
- * Memproses login pengguna.
- * @param {string} email - Email pengguna.
- * @param {string} password - Password pengguna.
- * @returns {object} - Objek status login dan data pengguna.
- */
 function userLogin(email, password) {
   try {
     const users = usersSheet.getDataRange().getValues();
@@ -75,11 +63,7 @@ function userLogin(email, password) {
 // --- FUNGSI UNTUK TAMPILAN GURU ---
 
 /**
- * Mengambil semua data yang dibutuhkan oleh dashboard guru dalam satu panggilan efisien.
- * @param {string} email - Email guru yang sedang login.
- * @param {number} year - Tahun yang diminta.
- * @param {number} month - Bulan yang diminta (1-12).
- * @returns {object} - Berisi data absensi, bulan terkunci, dan hari libur.
+ * MODIFIKASI: Menambahkan logika penguncian otomatis untuk bulan lalu.
  */
 function getAppSettingsForUser(email, year, month) {
   const attendanceData = getMonthlyAttendance(email, year, month);
@@ -93,6 +77,24 @@ function getAppSettingsForUser(email, year, month) {
     });
   } catch (e) { /* Abaikan jika error parsing */ }
   
+  // --- LOGIKA PENGUNCIAN OTOMATIS ---
+  const today = new Date();
+  const currentDay = today.getDate();
+  
+  if (currentDay > 10) {
+    const lastMonthDate = new Date();
+    lastMonthDate.setMonth(lastMonthDate.getMonth() - 1);
+    const lastMonthYear = lastMonthDate.getFullYear();
+    const lastMonth = String(lastMonthDate.getMonth() + 1).padStart(2, '0');
+    const lastMonthStr = `${lastMonthYear}-${lastMonth}`;
+    
+    // Tambahkan bulan lalu ke daftar terkunci jika belum ada
+    if (!lockedMonths.includes(lastMonthStr)) {
+      lockedMonths.push(lastMonthStr);
+    }
+  }
+  // --- AKHIR LOGIKA PENGUNCIAN OTOMATIS ---
+
   const holidays = {};
   try {
     const holidaysData = holidaysSheet.getDataRange().getValues().slice(1);
@@ -104,37 +106,33 @@ function getAppSettingsForUser(email, year, month) {
     });
   } catch (e) { /* Abaikan jika error */ }
 
+  const announcements = getAnnouncements();
+
   return {
     attendance: attendanceData,
     lockedMonths: lockedMonths,
-    holidays: holidays
+    holidays: holidays,
+    announcements: announcements
   };
 }
 
-/**
- * Menyimpan data absensi bulanan dari seorang guru.
- * @param {object} payload - Data absensi yang dikirim dari frontend.
- * @returns {object} - Status penyimpanan.
- */
 function saveMonthlyAttendance(payload) {
+  // ... (fungsi ini tidak berubah)
   const { email, name, school, attendance } = payload;
   const allData = attendanceSheet.getDataRange().getValues();
   const TIMEZONE = "GMT+8";
   const existingRecords = {};
-  
   for (let i = 1; i < allData.length; i++) {
     if (allData[i][1] === email && allData[i][4] instanceof Date) {
       const rowDate = Utilities.formatDate(allData[i][4], TIMEZONE, "yyyy-MM-dd");
       existingRecords[rowDate] = { rowIndex: i + 1 };
     }
   }
-
   for (const date in attendance) {
     const entry = attendance[date];
     const checkInDateTime = entry.checkIn ? new Date(`${date}T${entry.checkIn}:00`) : null;
     const checkOutDateTime = entry.checkOut ? new Date(`${date}T${entry.checkOut}:00`) : null;
     const reason = entry.reason || null;
-
     if (existingRecords[date]) {
       const rowIndex = existingRecords[date].rowIndex;
       attendanceSheet.getRange(rowIndex, 6, 1, 3).setValues([[checkInDateTime, checkOutDateTime, reason]]);
@@ -146,15 +144,11 @@ function saveMonthlyAttendance(payload) {
   return { status: "success", message: "Absensi bulan ini berhasil diperbarui!" };
 }
 
-/**
- * Fungsi internal untuk mengambil data absensi mentah.
- * @private
- */
 function getMonthlyAttendance(email, year, month) {
+  // ... (fungsi ini tidak berubah)
   const attendanceData = {};
   const data = attendanceSheet.getDataRange().getValues();
   const TIMEZONE = "GMT+8";
-
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
     if (row[1] === email && row[4] instanceof Date) {
@@ -173,12 +167,8 @@ function getMonthlyAttendance(email, year, month) {
 
 
 // --- FUNGSI KHUSUS PANEL ADMIN ---
+// (Semua fungsi di bawah ini tidak ada perubahan)
 
-/**
- * Mengambil daftar semua pengguna (akun guru & admin).
- * @param {string} adminEmail - Email admin untuk verifikasi.
- * @returns {Array<object>} - Daftar pengguna.
- */
 function getUsers(adminEmail) {
   if (!checkIfAdmin(adminEmail)) throw new Error("Akses ditolak.");
   const users = usersSheet.getDataRange().getValues().slice(1);
@@ -230,7 +220,13 @@ function getSettings(adminEmail) {
     holidays = holidaysData.map(row => ({ date: Utilities.formatDate(new Date(row[0]), "GMT", "yyyy-MM-dd"), description: row[1] })).filter(h => h.description);
   } catch (e) {}
   
-  return { lockedMonths: JSON.parse(lockedMonths), holidays: holidays };
+  const announcements = getAnnouncements();
+
+  return { 
+    lockedMonths: JSON.parse(lockedMonths), 
+    holidays: holidays,
+    announcements: announcements
+  };
 }
 
 function saveLockedMonths(adminEmail, months) {
@@ -251,4 +247,24 @@ function saveHolidays(adminEmail, holidays) {
     holidaysSheet.getRange(2, 1, rows.length, 2).setValues(rows);
   }
   return { status: "success", message: "Hari libur berhasil disimpan." };
+}
+
+function getAnnouncements() {
+  try {
+    const data = announcementsSheet.getRange("A1").getValue();
+    return data || "";
+  } catch (e) {
+    return "";
+  }
+}
+
+function saveAnnouncements(adminEmail, announcementText) {
+  if (!checkIfAdmin(adminEmail)) throw new Error("Akses ditolak.");
+  try {
+    announcementsSheet.clearContents();
+    announcementsSheet.getRange("A1").setValue(announcementText);
+    return { status: "success", message: "Pengumuman berhasil diperbarui." };
+  } catch (e) {
+    return { status: "error", message: e.message };
+  }
 }
