@@ -1,149 +1,220 @@
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
-  
+  @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
+
+  /* --- Variabel Warna --- */
+  :root {
+    --primary-color: #3B82F6;
+    --primary-hover-color: #2563EB;
+    --danger-color: #EF4444;
+    --danger-hover-color: #DC2626;
+    --success-color: #10B981;
+    --background-color: #F9FAFB;
+    --card-bg-color: #FFFFFF;
+    --text-primary-color: #1F2937;
+    --text-secondary-color: #6B7280;
+    --border-color: #E5E7EB;
+  }
+
   body {
     font-family: 'Poppins', sans-serif;
-    background-color: #f0f2f5;
+    background-color: var(--background-color);
     display: flex;
     justify-content: center;
     align-items: flex-start;
     min-height: 100vh;
     margin: 0;
     padding-top: 2rem;
-    color: #333;
+    color: var(--text-primary-color);
   }
+
   .container {
     width: 100%;
-    max-width: 500px;
+    max-width: 550px;
     padding: 20px;
   }
+
   .card {
-    background-color: white;
-    padding: 30px;
-    border-radius: 12px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    background-color: var(--card-bg-color);
+    padding: 35px;
+    border-radius: 16px;
+    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05), 0 4px 6px -2px rgba(0,0,0,0.04);
     text-align: center;
+    border: 1px solid var(--border-color);
+    position: relative; /* Diperlukan untuk tombol kembali */
   }
+
   h2 {
     margin-top: 0;
-    color: #1e3a8a;
+    margin-bottom: 12px;
+    color: var(--text-primary-color);
+    font-weight: 700;
   }
+
   p {
-    color: #666;
-    margin-bottom: 24px;
+    color: var(--text-secondary-color);
+    margin-bottom: 28px;
+    line-height: 1.6;
   }
+
   .input-group {
-    margin-bottom: 16px;
+    margin-bottom: 20px;
     text-align: left;
   }
+
   .input-group label {
     display: block;
-    font-weight: 500;
-    margin-bottom: 6px;
+    font-weight: 600;
+    margin-bottom: 8px;
     font-size: 14px;
   }
-  input[type="email"], input[type="password"] {
+
+  input[type="email"], input[type="password"], input[type="text"], input[type="date"], select {
     width: 100%;
-    padding: 12px;
-    border: 1px solid #ddd;
+    padding: 12px 15px;
+    border: 1px solid var(--border-color);
     border-radius: 8px;
     box-sizing: border-box;
     font-family: 'Poppins', sans-serif;
+    transition: border-color 0.3s, box-shadow 0.3s;
   }
+
+  input[type="email"]:focus, input[type="password"]:focus, input[type="text"]:focus, select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+  }
+
   button {
     width: 100%;
     padding: 12px;
-    background-color: #2563eb;
+    background-color: var(--primary-color);
     color: white;
     border: none;
     border-radius: 8px;
     font-size: 16px;
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
-    transition: background-color 0.3s;
+    transition: background-color 0.3s, transform 0.2s, box-shadow 0.3s;
   }
+
+  button:hover:not(:disabled) {
+    background-color: var(--primary-hover-color);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+  }
+
   button:disabled {
-    background-color: #9ca3af;
+    background-color: #9CA3AF;
     cursor: not-allowed;
   }
-  button:hover:not(:disabled) {
-    background-color: #1d4ed8;
-  }
+
   button.logout {
-    background-color: #dc2626;
+    background-color: var(--danger-color);
     margin-top: 10px;
   }
+
   button.logout:hover:not(:disabled) {
-    background-color: #b91c1c;
+    background-color: var(--danger-hover-color);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
   }
+
   .message {
     margin-top: 16px;
     font-size: 14px;
     font-weight: 500;
-    color: #dc2626;
+    color: var(--danger-color);
   }
+
   #save-message {
-    color: #16a34a;
+    color: var(--success-color);
+    font-weight: 600;
   }
-  #welcome-message small {
+
+  #welcome-message small, #guru-welcome-message small {
     font-weight: normal;
-    color: #555;
+    color: var(--text-secondary-color);
   }
+
+  /* --- Navigator Bulan --- */
   .month-navigator {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
+    margin-bottom: 24px;
   }
   .month-navigator button {
     width: auto;
-    padding: 8px 12px;
+    padding: 8px 16px;
     font-size: 14px;
-    background-color: #e5e7eb;
-    color: #374151;
+    background-color: #fff;
+    color: var(--text-primary-color);
+    border: 1px solid var(--border-color);
+  }
+  .month-navigator button:hover:not(:disabled) {
+    background-color: #F9FAFB;
+    border-color: #D1D5DB;
+    box-shadow: none;
+    transform: translateY(0);
   }
   .month-navigator h3 {
     margin: 0;
-    color: #1e3a8a;
+    color: var(--text-primary-color);
+    font-weight: 600;
   }
+
+  /* --- Tabel Absensi --- */
   #attendance-table-container {
-    max-height: 40vh;
+    max-height: 45vh;
     overflow-y: auto;
     margin-bottom: 20px;
-    border: 1px solid #eee;
-    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
   }
+
   table {
     width: 100%;
     border-collapse: collapse;
     font-size: 14px;
   }
+  
   th, td {
-    padding: 10px;
+    padding: 14px 12px;
     text-align: left;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--border-color);
   }
+
   th {
-    background-color: #f9fafb;
+    background-color: #F9FAFB;
     font-weight: 600;
+    color: #4B5563;
     position: sticky;
     top: 0;
+    z-index: 2;
   }
+  
+  tr:hover:not(.sunday-row):not(.holiday-row) {
+    background-color: #EFF6FF;
+  }
+
   td small {
-    color: #6b7280;
+    color: var(--text-secondary-color);
   }
+
   tr:last-child td {
     border-bottom: none;
   }
-
-  /* --- INILAH PERUBAIKANNYA --- */
+  
+  /* --- Input Waktu & Select di Tabel --- */
   input[type="time"] {
     border: 1px solid #ddd;
     border-radius: 6px;
     padding: 6px;
     font-family: 'Poppins', sans-serif;
-    width: 100%; /* Diubah dari 100px menjadi 100% */
+    width: 100%;
     box-sizing: border-box;
+    background-color: #FFFFFF; /* MODIFIKASI: Warna default putih */
+    transition: background-color 0.3s; /* MODIFIKASI: Transisi halus */
   }
   
   td select {
@@ -153,50 +224,171 @@
     font-family: 'Poppins', sans-serif;
     width: 100%;
     box-sizing: border-box;
-    height: 31px;
+    height: 35px;
+    background-color: #FFFFFF; /* MODIFIKASI: Warna default putih */
+  }
+
+  /* MODIFIKASI: Style untuk input jam yang dinonaktifkan */
+  input[type="time"]:disabled {
+    background-color: #F3F4F6; /* Warna abu-abu yang lebih lembut */
+    border-color: #E5E7EB;
+    cursor: not-allowed;
   }
   
-  .spinner {
-    padding: 40px;
-    text-align: center;
-    color: #666;
-  }
-  
-  .clear-btn {
-    background-color: #dc2626;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    padding: 4px 10px;
-    font-size: 13px;
+  /* --- Baris Hari Minggu & Libur --- */
+  .sunday-row, .holiday-row {
+    background-color: #FEE2E2;
+    color: #991B1B;
     font-weight: 500;
+  }
+  .sunday-row input, .sunday-row select, .holiday-row input, .holiday-row select {
+     background-color: #FCA5A5;
+     cursor: not-allowed;
+     border-color: #F87171;
+  }
+
+  /* --- Tombol Aksi di Tabel (Hapus) --- */
+  .clear-btn {
+    background-color: #FEE2E2;
+    color: var(--danger-color);
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 13px;
+    font-weight: 600;
     cursor: pointer;
-    transition: background-color 0.3s;
+    transition: all 0.3s;
   }
 
   .clear-btn:hover:not(:disabled) {
-    background-color: #b91c1c;
+    background-color: var(--danger-color);
+    color: white;
+    border-color: var(--danger-hover-color);
   }
 
   .clear-btn:disabled {
-    background-color: #fca5a5;
+    background-color: #E5E7EB;
+    color: #9CA3AF;
     cursor: not-allowed;
-  }
-
-  .sunday-row {
-    background-color: #f3f4f6;
-    color: #9ca3af;
   }
   
-  .sunday-row input[type="time"], .sunday-row select {
-    background-color: #e5e7eb;
-    border-color: #d1d5db;
-    cursor: not-allowed;
+  /* --- Style Admin Panel & Tabs --- */
+  .nav-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 24px;
+  }
+  .nav-tab {
+    padding: 12px 22px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    font-weight: 500;
+    color: var(--text-secondary-color);
+    transition: all 0.3s;
+  }
+  .nav-tab.active {
+    border-bottom-color: var(--primary-color);
+    color: var(--primary-color);
+    font-weight: 600;
+  }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* Style untuk Popup Modal */
+  .modal {
+    display: none; position: fixed; z-index: 1000;
+    left: 0; top: 0; width: 100%; height: 100%;
+    overflow: auto; background-color: rgba(31, 41, 55, 0.5);
+    backdrop-filter: blur(4px);
+  }
+  .modal-content {
+    background-color: #fefefe; margin: 8% auto; padding: 30px;
+    border: 1px solid #888; width: 90%; max-width: 500px;
+    border-radius: 16px;
+  }
+  .close-btn {
+    color: #aaa; float: right; font-size: 28px;
+    font-weight: bold; cursor: pointer;
   }
 
-  input[type="time"]:disabled {
-    background-color: #e5e7eb;
-    border-color: #d1d5db;
-    cursor: not-allowed;
+  /* --- Style untuk Bagian Pengumuman --- */
+  #announcement-section {
+    background-color: #E0F2FE;
+    border-left: 5px solid #0EA5E9;
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+    text-align: left;
+  }
+
+  #announcement-section h3 {
+    margin-top: 0;
+    margin-bottom: 8px;
+    color: #0369A1;
+    font-size: 16px;
+  }
+
+  #announcement-section p {
+    margin-bottom: 0;
+    color: #075985;
+    white-space: pre-wrap;
+  }
+
+  /* Style untuk Text Area di Admin Panel */
+  textarea {
+    width: 100%;
+    padding: 12px 15px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-sizing: border-box;
+    font-family: 'Poppins', sans-serif;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    resize: vertical;
+  }
+
+  textarea:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+  }
+
+  /* Style untuk Dasbor Guru */
+  .dashboard-actions {
+    margin-top: 30px;
+  }
+
+  .action-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    font-size: 18px;
+    padding: 18px;
+    margin-bottom: 10px;
+  }
+
+  .action-button .icon {
+    font-size: 24px;
+  }
+
+  /* Tombol Kembali di Halaman Ceklok */
+  .back-button {
+    width: auto;
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    background-color: transparent;
+    color: var(--text-secondary-color);
+    padding: 8px 12px;
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  .back-button:hover:not(:disabled) {
+    background-color: var(--background-color);
+    color: var(--text-primary-color);
+    transform: none;
+    box-shadow: none;
   }
 </style>
