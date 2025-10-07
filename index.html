@@ -48,7 +48,6 @@
       let currentUser = null;
       let currentDate = new Date();
 
-      // Saat halaman dimuat, cek sesi login
       document.addEventListener('DOMContentLoaded', () => {
         const userSession = sessionStorage.getItem('ceklokUser');
         if (userSession) {
@@ -58,7 +57,6 @@
       });
 
       function handleLogin() {
-        // ... (FUNGSI INI TETAP SAMA SEPERTI SEBELUMNYA)
         const email = document.getElementById("email").value;
         const password = document.getElementById("password").value;
         const button = event.target;
@@ -95,19 +93,11 @@
 
       function loadAttendanceForMonth(date) {
         const year = date.getFullYear();
-        const month = date.getMonth() + 1; // getMonth() is 0-indexed
-
-        // Tampilkan nama bulan dan tahun
+        const month = date.getMonth() + 1;
         document.getElementById('month-display').innerText = date.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
-        
-        // Buat tabel kosong dengan spinner
         const container = document.getElementById('attendance-table-container');
         container.innerHTML = '<div class="spinner">Memuat data...</div>';
-
-        // Buat tabel tanggal
         generateMonthTable(year, month);
-        
-        // Ambil data dari server
         google.script.run
           .withSuccessHandler(attendanceData => {
             populateAttendanceData(attendanceData);
@@ -119,14 +109,12 @@
         const container = document.getElementById('attendance-table-container');
         const daysInMonth = new Date(year, month, 0).getDate();
         
-        let tableHTML = '<table><thead><tr><th>Tanggal</th><th>Jam Masuk</th><th>Jam Pulang</th></tr></thead><tbody>';
+        let tableHTML = '<table><thead><tr><th>Tanggal</th><th>Jam Masuk</th><th>Jam Pulang</th><th>Alasan</th><th>Aksi</th></tr></thead><tbody>';
         
         for (let day = 1; day <= daysInMonth; day++) {
           const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-          const dateObj = new Date(year, month - 1, day); // Buat objek tanggal
+          const dateObj = new Date(year, month - 1, day);
           const dayName = dateObj.toLocaleDateString('id-ID', { weekday: 'short' });
-
-          // Cek apakah hari ini adalah hari Minggu (getDay() === 0)
           const isSunday = dateObj.getDay() === 0;
           const rowClass = isSunday ? 'class="sunday-row"' : '';
           const isDisabled = isSunday ? 'disabled' : '';
@@ -135,9 +123,30 @@
             <td>${day} <small>(${dayName})</small></td>
             <td><input type="time" id="in-${dateStr}" ${isDisabled}></td>
             <td><input type="time" id="out-${dateStr}" ${isDisabled}></td>
+            <td>
+              <select id="reason-${dateStr}" ${isDisabled} onchange="handleReasonChange(event)">
+                <option value="">-- Pilih Alasan --</option>
+                <option value="Hari Libur Sekolah">Hari Libur Sekolah</option>
+                <option value="Cuti Tahunan">Cuti Tahunan</option>
+                <option value="Cuti Bersalin (Anak Pertama s.d Ketiga)">Cuti Bersalin (Anak Pertama s.d Ketiga)</option>
+                <option value="Cuti Bersalin (Anak Keempat dst) Bulan Pertama">Cuti Bersalin (Anak Keempat dst) Bulan Pertama</option>
+                <option value="Cuti Bersalin (Anak Keempat dst) Bulan Kedua">Cuti Bersalin (Anak Keempat dst) Bulan Kedua</option>
+                <option value="Cuti Bersalin (Anak Keempat dst) Bulan Ketiga">Cuti Bersalin (Anak Keempat dst) Bulan Ketiga</option>
+                <option value="Cuti Besar Bulan Pertama">Cuti Besar Bulan Pertama</option>
+                <option value="Cuti Besar Bulan Kedua">Cuti Besar Bulan Kedua</option>
+                <option value="Cuti Besar Bulan Ketiga">Cuti Besar Bulan Ketiga</option>
+                <option value="Izin Tugas belajar">Izin Tugas belajar</option>
+                <option value="Izin Alasan Penting (1 s.d 2 Hari)">Izin Alasan Penting (1 s.d 2 Hari)</option>
+                <option value="Izin Alasan Penting (Lebih dari 2 Hari)">Izin Alasan Penting (Lebih dari 2 Hari)</option>
+                <option value="Izin Sakit (1 hari Sampai Dengan 14 Hari)">Izin Sakit (1 hari Sampai Dengan 14 Hari)</option>
+                <option value="Izin Sakit (Lebih dari 14 Hari Sampai Dengan 12 Bulan)">Izin Sakit (Lebih dari 14 Hari Sampai Dengan 12 Bulan)</option>
+                <option value="Izin Sakit (Lebih dari 12 Bulan Sampai Dengan 18 Bulan)">Izin Sakit (Lebih dari 12 Bulan Sampai Dengan 18 Bulan)</option>
+                <option value="Dinas Luar">Dinas Luar</option>
+              </select>
+            </td>
+            <td><button class="clear-btn" onclick="handleClearRow(event)" ${isDisabled}>Hapus</button></td>
           </tr>`;
         }
-        
         tableHTML += '</tbody></table>';
         container.innerHTML = tableHTML;
       }
@@ -146,8 +155,47 @@
         for(const date in data) {
           const checkInInput = document.getElementById(`in-${date}`);
           const checkOutInput = document.getElementById(`out-${date}`);
+          const reasonSelect = document.getElementById(`reason-${date}`);
+          
           if(checkInInput) checkInInput.value = data[date].checkIn;
           if(checkOutInput) checkOutInput.value = data[date].checkOut;
+          if(reasonSelect) {
+            reasonSelect.value = data[date].reason || "";
+            if (data[date].reason) {
+              if (checkInInput) checkInInput.disabled = true;
+              if (checkOutInput) checkOutInput.disabled = true;
+            }
+          }
+        }
+      }
+      
+      function handleReasonChange(event) {
+        const selectElement = event.target;
+        const hasReason = selectElement.value !== "";
+        const row = selectElement.closest('tr');
+        const timeInputs = row.querySelectorAll('input[type="time"]');
+
+        timeInputs.forEach(input => {
+          input.disabled = hasReason;
+          if (hasReason) {
+            input.value = '';
+          }
+        });
+      }
+
+      function handleClearRow(event) {
+        event.preventDefault(); 
+        const row = event.target.closest('tr');
+        const timeInputs = row.querySelectorAll('input[type="time"]');
+        const reasonSelect = row.querySelector('select');
+        
+        timeInputs.forEach(input => {
+          input.value = '';
+          input.disabled = false; 
+        });
+        
+        if (reasonSelect) {
+          reasonSelect.value = '';
         }
       }
 
@@ -161,27 +209,22 @@
         button.disabled = true;
         button.textContent = "Menyimpan...";
         document.getElementById('save-message').innerText = "";
-
         const attendancePayload = {
             email: currentUser.email,
             name: currentUser.name,
             school: currentUser.school,
             attendance: {}
         };
-        
         const rows = document.querySelectorAll('#attendance-table-container tbody tr');
         rows.forEach(row => {
           const date = row.id.replace('row-', '');
-          
-          // ---- BAGIAN YANG DIPERBAIKI ----
-          // Cari input di dalam sel tabel ke-2 (td) dan ke-3 (td)
           const checkIn = row.querySelector('td:nth-child(2) input').value;
           const checkOut = row.querySelector('td:nth-child(3) input').value;
-          // ---------------------------------
+          const reason = row.querySelector('td:nth-child(4) select').value;
           
-          if(checkIn || checkOut) { // Hanya kirim data yang terisi
-            attendancePayload.attendance[date] = { checkIn, checkOut };
-          }
+          // --- INILAH PERUBAIKANNYA ---
+          // Hapus kondisi 'if', sehingga data kosong pun akan dikirim.
+          attendancePayload.attendance[date] = { checkIn, checkOut, reason };
         });
 
         google.script.run
@@ -201,7 +244,7 @@
       function handleLogout() {
         sessionStorage.removeItem('ceklokUser');
         currentUser = null;
-        currentDate = new Date(); // Reset tanggal ke hari ini
+        currentDate = new Date();
         document.getElementById("login-container").style.display = "block";
         document.getElementById("dashboard-container").style.display = "none";
         document.getElementById('email').value = "";
