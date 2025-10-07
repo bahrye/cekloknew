@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <?!= include('style'); ?>
+  </head>
+  <body>
+    <div class="container">
+      <div id="login-container">
+        <div class="card">
+          <h2>🔐 Ceklok Guru</h2>
+          <p>Silakan login untuk melanjutkan</p>
+          <div class="input-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" placeholder="Masukkan email Anda">
+          </div>
+          <div class="input-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" placeholder="Masukkan password">
+          </div>
+          <button onclick="handleLogin()">Login</button>
+          <p id="login-message" class="message"></p>
+        </div>
+      </div>
+
+      <div id="dashboard-container" style="display:none;">
+        <div class="card">
+          <h2 id="welcome-message"></h2>
+          
+          <div class="month-navigator">
+            <button onclick="changeMonth(-1)">&#9664; Bulan Lalu</button>
+            <h3 id="month-display"></h3>
+            <button onclick="changeMonth(1)">Bulan Depan &#9654;</button>
+          </div>
+
+          <div id="attendance-table-container">
+             </div>
+
+          <button onclick="handleSave()">Simpan Semua Perubahan</button>
+          <button class="logout" onclick="handleLogout()">Logout</button>
+          <p id="save-message" class="message"></p>
+        </div>
+      </div>
+
+    </div>
+    
+    <script>
+      let currentUser = null;
+      let currentDate = new Date();
+
+      // Saat halaman dimuat, cek sesi login
+      document.addEventListener('DOMContentLoaded', () => {
+        const userSession = sessionStorage.getItem('ceklokUser');
+        if (userSession) {
+          currentUser = JSON.parse(userSession);
+          showDashboard(currentUser);
+        }
+      });
+
+      function handleLogin() {
+        // ... (FUNGSI INI TETAP SAMA SEPERTI SEBELUMNYA)
+        const email = document.getElementById("email").value;
+        const password = document.getElementById("password").value;
+        const button = event.target;
+        if (!email || !password) {
+          document.getElementById('login-message').innerText = "Email dan password wajib diisi.";
+          return;
+        }
+        button.disabled = true;
+        button.textContent = "Mencoba Login...";
+        document.getElementById('login-message').innerText = "";
+        google.script.run.withSuccessHandler(response => {
+            if (response.status === "success") {
+              sessionStorage.setItem('ceklokUser', JSON.stringify(response));
+              currentUser = response;
+              showDashboard(response);
+            } else {
+              document.getElementById('login-message').innerText = response.message;
+              button.disabled = false;
+              button.textContent = "Login";
+            }
+          }).withFailureHandler(error => {
+            document.getElementById('login-message').innerText = "Error: " + error.message;
+            button.disabled = false;
+            button.textContent = "Login";
+          }).userLogin(email, password);
+      }
+
+      function showDashboard(userData) {
+        document.getElementById("login-container").style.display = "none";
+        document.getElementById("dashboard-container").style.display = "block";
+        document.getElementById("welcome-message").innerHTML = `Halo, <strong>${userData.name}</strong><br><small>${userData.school}</small>`;
+        loadAttendanceForMonth(currentDate);
+      }
+
+      function loadAttendanceForMonth(date) {
+        const year = date.getFullYear();
+        const month = date.getMonth() + 1; // getMonth() is 0-indexed
+
+        // Tampilkan nama bulan dan tahun
+        document.getElementById('month-display').innerText = date.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+        
+        // Buat tabel kosong dengan spinner
+        const container = document.getElementById('attendance-table-container');
+        container.innerHTML = '<div class="spinner">Memuat data...</div>';
+
+        // Buat tabel tanggal
+        generateMonthTable(year, month);
+        
+        // Ambil data dari server
+        google.script.run
+          .withSuccessHandler(attendanceData => {
+            populateAttendanceData(attendanceData);
+          })
+          .getMonthlyAttendance(currentUser.email, year, month);
+      }
+
+      function generateMonthTable(year, month) {
+        const container = document.getElementById('attendance-table-container');
+        const daysInMonth = new Date(year, month, 0).getDate();
+        
+        let tableHTML = '<table><thead><tr><th>Tanggal</th><th>Jam Masuk</th><th>Jam Pulang</th></tr></thead><tbody>';
+        
+        for (let day = 1; day <= daysInMonth; day++) {
+          const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          const dateObj = new Date(year, month - 1, day); // Buat objek tanggal
+          const dayName = dateObj.toLocaleDateString('id-ID', { weekday: 'short' });
+
+          // Cek apakah hari ini adalah hari Minggu (getDay() === 0)
+          const isSunday = dateObj.getDay() === 0;
+          const rowClass = isSunday ? 'class="sunday-row"' : '';
+          const isDisabled = isSunday ? 'disabled' : '';
+
+          tableHTML += `<tr id="row-${dateStr}" ${rowClass}>
+            <td>${day} <small>(${dayName})</small></td>
+            <td><input type="time" id="in-${dateStr}" ${isDisabled}></td>
+            <td><input type="time" id="out-${dateStr}" ${isDisabled}></td>
+          </tr>`;
+        }
+        
+        tableHTML += '</tbody></table>';
+        container.innerHTML = tableHTML;
+      }
+      
+      function populateAttendanceData(data) {
+        for(const date in data) {
+          const checkInInput = document.getElementById(`in-${date}`);
+          const checkOutInput = document.getElementById(`out-${date}`);
+          if(checkInInput) checkInInput.value = data[date].checkIn;
+          if(checkOutInput) checkOutInput.value = data[date].checkOut;
+        }
+      }
+
+      function changeMonth(direction) {
+        currentDate.setMonth(currentDate.getMonth() + direction);
+        loadAttendanceForMonth(currentDate);
+      }
+
+      function handleSave() {
+        const button = event.target;
+        button.disabled = true;
+        button.textContent = "Menyimpan...";
+        document.getElementById('save-message').innerText = "";
+
+        const attendancePayload = {
+            email: currentUser.email,
+            name: currentUser.name,
+            school: currentUser.school,
+            attendance: {}
+        };
+        
+        const rows = document.querySelectorAll('#attendance-table-container tbody tr');
+        rows.forEach(row => {
+          const date = row.id.replace('row-', '');
+          
+          // ---- BAGIAN YANG DIPERBAIKI ----
+          // Cari input di dalam sel tabel ke-2 (td) dan ke-3 (td)
+          const checkIn = row.querySelector('td:nth-child(2) input').value;
+          const checkOut = row.querySelector('td:nth-child(3) input').value;
+          // ---------------------------------
+          
+          if(checkIn || checkOut) { // Hanya kirim data yang terisi
+            attendancePayload.attendance[date] = { checkIn, checkOut };
+          }
+        });
+
+        google.script.run
+          .withSuccessHandler(response => {
+            document.getElementById('save-message').innerText = response.message;
+            button.disabled = false;
+            button.textContent = "Simpan Semua Perubahan";
+          })
+          .withFailureHandler(error => {
+            document.getElementById('save-message').innerText = "Error: " + error.message;
+            button.disabled = false;
+            button.textContent = "Simpan Semua Perubahan";
+          })
+          .saveMonthlyAttendance(attendancePayload);
+      }
+      
+      function handleLogout() {
+        sessionStorage.removeItem('ceklokUser');
+        currentUser = null;
+        currentDate = new Date(); // Reset tanggal ke hari ini
+        document.getElementById("login-container").style.display = "block";
+        document.getElementById("dashboard-container").style.display = "none";
+        document.getElementById('email').value = "";
+        document.getElementById('password').value = "";
+        document.getElementById('login-message').innerText = "Anda berhasil logout.";
+      }
+    </script>
+  </body>
+</html>
