@@ -6,15 +6,15 @@
     background-color: #f0f2f5;
     display: flex;
     justify-content: center;
-    align-items: flex-start; /* Ubah ke flex-start */
+    align-items: flex-start;
     min-height: 100vh;
     margin: 0;
-    padding-top: 2rem; /* Tambah padding atas */
+    padding-top: 2rem;
     color: #333;
   }
   .container {
     width: 100%;
-    max-width: 500px; /* Lebarkan container */
+    max-width: 500px;
     padding: 20px;
   }
   .card {
@@ -26,7 +26,7 @@
   }
   h2 {
     margin-top: 0;
-    color: #1e3a8a; /* Dark Blue */
+    color: #1e3a8a;
   }
   p {
     color: #666;
@@ -53,7 +53,7 @@
   button {
     width: 100%;
     padding: 12px;
-    background-color: #2563eb; /* Blue */
+    background-color: #2563eb;
     color: white;
     border: none;
     border-radius: 8px;
@@ -67,30 +67,28 @@
     cursor: not-allowed;
   }
   button:hover:not(:disabled) {
-    background-color: #1d4ed8; /* Darker Blue */
+    background-color: #1d4ed8;
   }
   button.logout {
-    background-color: #dc2626; /* Red */
+    background-color: #dc2626;
     margin-top: 10px;
   }
   button.logout:hover:not(:disabled) {
-    background-color: #b91c1c; /* Darker Red */
+    background-color: #b91c1c;
   }
   .message {
     margin-top: 16px;
     font-size: 14px;
     font-weight: 500;
-    color: #dc2626; /* Red for errors */
+    color: #dc2626;
   }
   #save-message {
-    color: #16a34a; /* Green for success */
+    color: #16a34a;
   }
   #welcome-message small {
     font-weight: normal;
     color: #555;
   }
-
-  /* === STYLE BARU UNTUK ABSENSI BULANAN === */
   .month-navigator {
     display: flex;
     justify-content: space-between;
@@ -109,8 +107,8 @@
     color: #1e3a8a;
   }
   #attendance-table-container {
-    max-height: 40vh; /* Batasi tinggi tabel */
-    overflow-y: auto; /* Tambah scroll jika tabel panjang */
+    max-height: 40vh;
+    overflow-y: auto;
     margin-bottom: 20px;
     border: 1px solid #eee;
     border-radius: 8px;
@@ -137,24 +135,66 @@
   tr:last-child td {
     border-bottom: none;
   }
+
+  /* --- INILAH PERUBAIKANNYA --- */
   input[type="time"] {
     border: 1px solid #ddd;
     border-radius: 6px;
     padding: 6px;
     font-family: 'Poppins', sans-serif;
-    width: 100px;
+    width: 100%; /* Diubah dari 100px menjadi 100% */
+    box-sizing: border-box;
   }
+  
+  td select {
+    padding: 6px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-family: 'Poppins', sans-serif;
+    width: 100%;
+    box-sizing: border-box;
+    height: 31px;
+  }
+  
   .spinner {
     padding: 40px;
     text-align: center;
     color: #666;
   }
-  /* === STYLE BARU UNTUK HARI MINGGU === */
-  .sunday-row {
-    background-color: #f3f4f6; /* Warna abu-abu muda */
-    color: #9ca3af; /* Warna teks lebih redup */
+  
+  .clear-btn {
+    background-color: #dc2626;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.3s;
   }
-  .sunday-row input[type="time"] {
+
+  .clear-btn:hover:not(:disabled) {
+    background-color: #b91c1c;
+  }
+
+  .clear-btn:disabled {
+    background-color: #fca5a5;
+    cursor: not-allowed;
+  }
+
+  .sunday-row {
+    background-color: #f3f4f6;
+    color: #9ca3af;
+  }
+  
+  .sunday-row input[type="time"], .sunday-row select {
+    background-color: #e5e7eb;
+    border-color: #d1d5db;
+    cursor: not-allowed;
+  }
+
+  input[type="time"]:disabled {
     background-color: #e5e7eb;
     border-color: #d1d5db;
     cursor: not-allowed;
