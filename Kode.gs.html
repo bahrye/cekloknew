@@ -3,23 +3,19 @@ const SPREADSHEET_ID = "1EIQY1DeGcwhEaYojbGMah-S5HbtsrON5YRy37bl_vLg";
 const usersSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName("Users");
 const attendanceSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName("Attendance");
 
-// Fungsi utama untuk menampilkan halaman web
 function doGet() {
   return HtmlService.createTemplateFromFile('index').evaluate()
       .setTitle("Aplikasi Ceklok Guru")
       .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
-// Fungsi untuk menyertakan file CSS
 function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
-// Fungsi untuk memverifikasi login guru (TETAP SAMA)
 function userLogin(email, password) {
   try {
     const users = usersSheet.getDataRange().getValues();
-    // Mulai dari 1 untuk melewati header
     for (let i = 1; i < users.length; i++) {
       if (users[i][0].toLowerCase() === email.toLowerCase() && users[i][1] == password) { 
         return { 
@@ -36,13 +32,6 @@ function userLogin(email, password) {
   }
 }
 
-/**
- * MENGAMBIL DATA ABSENSI BULANAN (VERSI PERBAIKAN MENIT)
- * @param {string} email - Email guru.
- * @param {number} year - Tahun yang diminta.
- * @param {number} month - Bulan yang diminta (1-12).
- * @returns {object} - Objek berisi data absensi, key-nya adalah tanggal (YYYY-MM-DD).
- */
 function getMonthlyAttendance(email, year, month) {
   const attendanceData = {};
   const data = attendanceSheet.getDataRange().getValues();
@@ -61,17 +50,14 @@ function getMonthlyAttendance(email, year, month) {
       
       const formattedDate = Utilities.formatDate(rowDateObj, TIMEZONE, "yyyy-MM-dd");
       
-      // ========================================================================
-      // PERBAIKAN UTAMA DI SINI: Memastikan format adalah "HH:mm"
-      // "HH" adalah format 24 jam (00-23)
-      // "mm" (huruf kecil) adalah format untuk MENIT (00-59)
-      // ========================================================================
       const checkInTime = row[5] instanceof Date ? Utilities.formatDate(row[5], TIMEZONE, "HH:mm") : "";
       const checkOutTime = row[6] instanceof Date ? Utilities.formatDate(row[6], TIMEZONE, "HH:mm") : "";
+      const reason = row[7] || "";
       
       attendanceData[formattedDate] = {
         checkIn: checkInTime,
-        checkOut: checkOutTime
+        checkOut: checkOutTime,
+        reason: reason
       };
     }
   }
@@ -79,7 +65,7 @@ function getMonthlyAttendance(email, year, month) {
 }
 
 /**
- * MENYIMPAN DATA ABSENSI BULANAN (VERSI PERBAIKAN FINAL)
+ * MENYIMPAN DATA ABSENSI BULANAN (VERSI PERBAIKAN)
  * @param {object} payload - Berisi email, nama, sekolah, dan data absensi.
  * @returns {object} - Status penyimpanan.
  */
@@ -88,7 +74,6 @@ function saveMonthlyAttendance(payload) {
   const allData = attendanceSheet.getDataRange().getValues();
   const TIMEZONE = "GMT+8";
 
-  // 1. Petakan data yang ada di sheet untuk pembaruan cepat
   const existingRecords = {};
   for (let i = 1; i < allData.length; i++) {
     if(allData[i][1] === email && allData[i][4] instanceof Date) {
@@ -97,29 +82,32 @@ function saveMonthlyAttendance(payload) {
     }
   }
 
-  // 2. Proses data absensi yang dikirim dari klien
   for (const date in attendance) {
     const entry = attendance[date];
-
-    // **PERBAIKAN UTAMA**: Buat objek Date lengkap dengan tanggal + waktu
+    
+    // Siapkan data, akan menjadi null jika string-nya kosong
     const checkInDateTime = entry.checkIn ? new Date(`${date}T${entry.checkIn}:00`) : null;
     const checkOutDateTime = entry.checkOut ? new Date(`${date}T${entry.checkOut}:00`) : null;
+    const reason = entry.reason || null;
 
     if (existingRecords[date]) {
-      // Data sudah ada, perbarui baris yang ada
+      // Data sudah ada, perbarui baris yang ada.
+      // setValue(null) akan MENGOSONGKAN sel di spreadsheet.
       const rowIndex = existingRecords[date].rowIndex;
-      attendanceSheet.getRange(rowIndex, 6).setValue(checkInDateTime);
-      attendanceSheet.getRange(rowIndex, 7).setValue(checkOutDateTime);
-    } else if (entry.checkIn || entry.checkOut) {
-      // Data belum ada, tambahkan baris baru
+      attendanceSheet.getRange(rowIndex, 6, 1, 3).setValues([[checkInDateTime, checkOutDateTime, reason]]);
+
+    } else if (checkInDateTime || checkOutDateTime || reason) {
+      // Data belum ada DAN ada isinya, maka buat baris baru.
+      // Ini mencegah pembuatan baris kosong.
       const newRow = [
         new Date(),
         email,
         name,
         school,
-        new Date(date), // Simpan tanggal sebagai objek Date
+        new Date(date),
         checkInDateTime,
-        checkOutDateTime
+        checkOutDateTime,
+        reason
       ];
       attendanceSheet.appendRow(newRow);
     }
