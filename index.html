@@ -31,6 +31,20 @@
             <h3>Pengumuman</h3>
             <p id="announcement-text">Tidak ada pengumuman saat ini.</p>
           </div>
+          <hr style="margin: 25px 0;">
+          <h3>Unduh Rekap Pribadi</h3>
+          <div class="input-group">
+              <label for="guru-rekap-month">Pilih Bulan dan Tahun</label>
+              <input type="month" id="guru-rekap-month">
+          </div>
+          <button onclick="handleGuruDownloadRekap()" id="guru-download-rekap-button" style="width: 100%; margin-top: 10px;">
+              Buat & Unduh Rekap Saya
+          </button>
+          <p id="guru-rekap-message" class="message"></p>
+          <button onclick="handleGuruDownloadAllRekap()" id="guru-download-all-rekap-button" class="action-button secondary" style="margin-top: 10px; background-color: #6B7280;">
+              Unduh Rekap Semua Guru (Satu Sekolah)
+          </button>
+          <p id="guru-rekap-all-message" class="message"></p>
           <div class="dashboard-actions">
             <button id="ceklok-button" class="action-button" onclick="showCeklokPage()">
               <span>Isi Ceklok Kehadiran</span>
@@ -515,45 +529,51 @@
             .getSchoolList(currentUser.email);
       }
 
+      // Ganti seluruh fungsi handleDownloadRekap dengan yang ini
       function handleDownloadRekap() {
-        const schoolInput = document.getElementById('rekap-school').value;
-        const monthInput = document.getElementById('rekap-month').value;
-        const button = document.getElementById('download-rekap-button');
-        if (!schoolInput) {
-            displayMessage('rekap-message', 'Silakan pilih sekolah terlebih dahulu.');
-            return;
-        }
-        if (!monthInput) {
-            displayMessage('rekap-message', 'Silakan pilih bulan dan tahun terlebih dahulu.');
-            return;
-        }
-        button.disabled = true;
-        button.textContent = 'Mempersiapkan...';
-        displayMessage('rekap-message', 'Sedang memproses data rekap, mohon tunggu...', true);
-        google.script.run
-            .withSuccessHandler(response => {
-                if (response.success) {
-                    displayMessage('rekap-message', response.message, true);
-                    const spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/edit`;
-                    const link = document.createElement('a');
-                    link.href = spreadsheetUrl;
-                    link.target = '_blank';
-                    link.textContent = 'Buka Spreadsheet untuk mengunduh PDF dari sheet CETAK.';
-                    const msgElem = document.getElementById('rekap-message');
-                    msgElem.appendChild(document.createElement('br'));
-                    msgElem.appendChild(link);
-                } else {
-                    displayMessage('rekap-message', 'Error: ' + response.error);
-                }
-                button.disabled = false;
-                button.textContent = 'Buat Rekap & Unduh';
-            })
-            .withFailureHandler(error => {
-                displayMessage('rekap-message', 'Error: ' + error.message);
-                button.disabled = false;
-                button.textContent = 'Buat Rekap & Unduh';
-            })
-            .prepareMonthlyRekapForPrint(currentUser.email, monthInput, schoolInput);
+          const schoolInput = document.getElementById('rekap-school').value;
+          const monthInput = document.getElementById('rekap-month').value;
+          const button = document.getElementById('download-rekap-button');
+          
+          if (!schoolInput) {
+              displayMessage('rekap-message', 'Silakan pilih sekolah terlebih dahulu.');
+              return;
+          }
+          if (!monthInput) {
+              displayMessage('rekap-message', 'Silakan pilih bulan dan tahun terlebih dahulu.');
+              return;
+          }
+
+          button.disabled = true;
+          button.textContent = 'Membuat PDF...';
+          displayMessage('rekap-message', 'Sedang memproses & membuat PDF, mohon tunggu...', true);
+
+          google.script.run
+              .withSuccessHandler(response => {
+                  if (response.success) {
+                      // Membuat link unduhan dari data base64
+                      const link = document.createElement('a');
+                      link.href = `data:application/pdf;base64,${response.pdfData}`;
+                      link.download = response.fileName;
+                      
+                      // Memicu klik untuk memulai unduhan
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+
+                      displayMessage('rekap-message', 'PDF berhasil dibuat dan sedang diunduh!', true);
+                  } else {
+                      displayMessage('rekap-message', 'Error: ' + response.error);
+                  }
+                  button.disabled = false;
+                  button.textContent = 'Buat Rekap & Unduh';
+              })
+              .withFailureHandler(error => {
+                  displayMessage('rekap-message', 'Error: ' + error.message);
+                  button.disabled = false;
+                  button.textContent = 'Buat Rekap & Unduh';
+              })
+              .prepareMonthlyRekapForPrint(currentUser.email, monthInput, schoolInput);
       }
 
       function openTab(evt, tabName) {
@@ -564,6 +584,91 @@
         for (i = 0; i < tablinks.length; i++) { tablinks[i].className = tablinks[i].className.replace(" active", ""); }
         document.getElementById(tabName).style.display = "block";
         evt.currentTarget.className += " active";
+      }
+
+      // Tambahkan fungsi baru ini di bagian // LOGIKA UNTUK GURU
+      function handleGuruDownloadRekap() {
+          const monthInput = document.getElementById('guru-rekap-month').value;
+          const button = document.getElementById('guru-download-rekap-button');
+
+          if (!monthInput) {
+              displayMessage('guru-rekap-message', 'Silakan pilih bulan dan tahun terlebih dahulu.');
+              return;
+          }
+
+          button.disabled = true;
+          button.textContent = 'Membuat PDF...';
+          displayMessage('guru-rekap-message', 'Sedang memproses & membuat PDF, mohon tunggu...', true);
+
+          google.script.run
+              .withSuccessHandler(response => {
+                  if (response.success) {
+                      const link = document.createElement('a');
+                      link.href = `data:application/pdf;base64,${response.pdfData}`;
+                      link.download = response.fileName;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                      displayMessage('guru-rekap-message', 'PDF berhasil dibuat dan sedang diunduh!', true);
+                  } else {
+                      displayMessage('guru-rekap-message', 'Error: ' + response.error);
+                  }
+                  button.disabled = false;
+                  button.textContent = 'Buat & Unduh Rekap Saya';
+              })
+              .withFailureHandler(error => {
+                  displayMessage('guru-rekap-message', 'Error: ' + error.message);
+                  button.disabled = false;
+                  button.textContent = 'Buat & Unduh Rekap Saya';
+              })
+              .prepareMyRekapForPrint(currentUser.email, monthInput);
+      }
+
+      // Tambahkan fungsi baru ini di bagian // LOGIKA UNTUK GURU
+      function handleGuruDownloadAllRekap() {
+          // Menggunakan input bulan yang sama dengan rekap pribadi
+          const monthInput = document.getElementById('guru-rekap-month').value; 
+          const button = document.getElementById('guru-download-all-rekap-button');
+
+          if (!monthInput) {
+              displayMessage('guru-rekap-all-message', 'Silakan pilih bulan dan tahun di atas terlebih dahulu.');
+              return;
+          }
+
+          // Menggunakan informasi sekolah dari guru yang sedang login
+          const userSchool = currentUser.school;
+          if (!userSchool) {
+              displayMessage('guru-rekap-all-message', 'Informasi sekolah Anda tidak ditemukan.');
+              return;
+          }
+
+          button.disabled = true;
+          button.textContent = 'Membuat PDF...';
+          displayMessage('guru-rekap-all-message', 'Sedang memproses rekap semua guru, ini mungkin perlu waktu lebih lama...', true);
+
+          // Memanggil fungsi rekap yang sama dengan yang digunakan admin
+          google.script.run
+              .withSuccessHandler(response => {
+                  if (response.success) {
+                      const link = document.createElement('a');
+                      link.href = `data:application/pdf;base64,${response.pdfData}`;
+                      link.download = response.fileName;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                      displayMessage('guru-rekap-all-message', 'PDF berhasil dibuat dan sedang diunduh!', true);
+                  } else {
+                      displayMessage('guru-rekap-all-message', 'Error: ' + response.error);
+                  }
+                  button.disabled = false;
+                  button.textContent = 'Unduh Rekap Semua Guru (Satu Sekolah)';
+              })
+              .withFailureHandler(error => {
+                  displayMessage('guru-rekap-all-message', 'Error: ' + error.message);
+                  button.disabled = false;
+                  button.textContent = 'Unduh Rekap Semua Guru (Satu Sekolah)';
+              })
+              .prepareSchoolRekapForPrint(currentUser.email, monthInput, userSchool); // Mengirim email & bulan (sama), dan nama sekolah guru ybs
       }
     </script>
   </body>
