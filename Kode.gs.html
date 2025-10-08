@@ -1,7 +1,17 @@
 /**
  * ===================================================================
  * APLIKASI CEKLOK GURU & ADMIN
- * Backend Google Apps Script (Kode.gs) - VERSI FINAL LENGKAP
+ * Backend Google Apps Script (Kode.gs) - VERSI FINAL
+ *
+ * FITUR:
+ * - Login untuk Guru & Admin
+ * - Dasbor Guru & Admin
+ * - Pengisian Absensi Bulanan oleh Guru
+ * - Manajemen Akun oleh Admin (CRUD)
+ * - Pengaturan Aplikasi oleh Admin (Pengumuman, Kunci Absen, Hari Libur)
+ * - Unduh Rekap PDF Otomatis (Admin & Guru)
+ * - Menggunakan Sheet Sementara untuk Unduhan Simultan yang Aman (Tanpa Konflik)
+ * - Penyesuaian Lebar Kolom Otomatis pada Laporan
  * ===================================================================
  */
 
@@ -72,17 +82,13 @@ function getAppSettingsForUser(email, year, month) {
         lockedMonths = JSON.parse(row[1]);
       }
     });
-  } catch (e) { /* Abaikan jika error parsing */ }
+  } catch (e) {}
   
   const today = new Date();
-  const currentDay = today.getDate();
-  
-  if (currentDay > 10) {
+  if (today.getDate() > 10) {
     const lastMonthDate = new Date();
     lastMonthDate.setMonth(lastMonthDate.getMonth() - 1);
-    const lastMonthYear = lastMonthDate.getFullYear();
-    const lastMonth = String(lastMonthDate.getMonth() + 1).padStart(2, '0');
-    const lastMonthStr = `${lastMonthYear}-${lastMonth}`;
+    const lastMonthStr = `${lastMonthDate.getFullYear()}-${String(lastMonthDate.getMonth() + 1).padStart(2, '0')}`;
     if (!lockedMonths.includes(lastMonthStr)) {
       lockedMonths.push(lastMonthStr);
     }
@@ -93,20 +99,13 @@ function getAppSettingsForUser(email, year, month) {
     const holidaysData = holidaysSheet.getDataRange().getValues().slice(1);
     holidaysData.forEach(row => {
       if (row[0] instanceof Date && row[1]) {
-        const formattedDate = Utilities.formatDate(row[0], "GMT", "yyyy-MM-dd");
-        holidays[formattedDate] = row[1];
+        holidays[Utilities.formatDate(row[0], "GMT", "yyyy-MM-dd")] = row[1];
       }
     });
-  } catch (e) { /* Abaikan jika error */ }
+  } catch (e) {}
 
   const announcements = getAnnouncements();
-
-  return {
-    attendance: attendanceData,
-    lockedMonths: lockedMonths,
-    holidays: holidays,
-    announcements: announcements
-  };
+  return { attendance: attendanceData, lockedMonths: lockedMonths, holidays: holidays, announcements: announcements };
 }
 
 function saveMonthlyAttendance(payload) {
@@ -116,8 +115,7 @@ function saveMonthlyAttendance(payload) {
   const existingRecords = {};
   for (let i = 1; i < allData.length; i++) {
     if (allData[i][1] === email && allData[i][4] instanceof Date) {
-      const rowDate = Utilities.formatDate(allData[i][4], TIMEZONE, "yyyy-MM-dd");
-      existingRecords[rowDate] = { rowIndex: i + 1 };
+      existingRecords[Utilities.formatDate(allData[i][4], TIMEZONE, "yyyy-MM-dd")] = { rowIndex: i + 1 };
     }
   }
   for (const date in attendance) {
@@ -126,11 +124,9 @@ function saveMonthlyAttendance(payload) {
     const checkOutDateTime = entry.checkOut ? new Date(`${date}T${entry.checkOut}:00`) : null;
     const reason = entry.reason || null;
     if (existingRecords[date]) {
-      const rowIndex = existingRecords[date].rowIndex;
-      attendanceSheet.getRange(rowIndex, 6, 1, 3).setValues([[checkInDateTime, checkOutDateTime, reason]]);
+      attendanceSheet.getRange(existingRecords[date].rowIndex, 6, 1, 3).setValues([[checkInDateTime, checkOutDateTime, reason]]);
     } else if (checkInDateTime || checkOutDateTime || reason) {
-      const newRow = [new Date(), email, name, school, new Date(date), checkInDateTime, checkOutDateTime, reason];
-      attendanceSheet.appendRow(newRow);
+      attendanceSheet.appendRow([new Date(), email, name, school, new Date(date), checkInDateTime, checkOutDateTime, reason]);
     }
   }
   return { status: "success", message: "Absensi bulan ini berhasil diperbarui!" };
@@ -146,16 +142,16 @@ function getMonthlyAttendance(email, year, month) {
       const rowDateObj = row[4];
       if (rowDateObj.getFullYear() === year && (rowDateObj.getMonth() + 1) === month) {
         const formattedDate = Utilities.formatDate(rowDateObj, TIMEZONE, "yyyy-MM-dd");
-        const checkInTime = row[5] instanceof Date ? Utilities.formatDate(row[5], TIMEZONE, "HH:mm") : "";
-        const checkOutTime = row[6] instanceof Date ? Utilities.formatDate(row[6], TIMEZONE, "HH:mm") : "";
-        const reason = row[7] || "";
-        attendanceData[formattedDate] = { checkIn: checkInTime, checkOut: checkOutTime, reason: reason };
+        attendanceData[formattedDate] = {
+          checkIn: row[5] instanceof Date ? Utilities.formatDate(row[5], TIMEZONE, "HH:mm") : "",
+          checkOut: row[6] instanceof Date ? Utilities.formatDate(row[6], TIMEZONE, "HH:mm") : "",
+          reason: row[7] || ""
+        };
       }
     }
   }
   return attendanceData;
 }
-
 
 // --- FUNGSI KHUSUS PANEL ADMIN ---
 
@@ -197,26 +193,18 @@ function deleteUser(adminEmail, emailToDelete) {
 
 function getSettings(adminEmail) {
   if (!checkIfAdmin(adminEmail)) throw new Error("Akses ditolak.");
-  
   let lockedMonths = "[]";
   try {
     const settingsData = settingsSheet.getDataRange().getValues();
     settingsData.forEach(row => { if (row[0] === 'locked_months') lockedMonths = row[1]; });
   } catch (e) {}
-
   let holidays = [];
   try {
     const holidaysData = holidaysSheet.getDataRange().getValues().slice(1);
     holidays = holidaysData.map(row => ({ date: Utilities.formatDate(new Date(row[0]), "GMT", "yyyy-MM-dd"), description: row[1] })).filter(h => h.description);
   } catch (e) {}
-  
   const announcements = getAnnouncements();
-
-  return { 
-    lockedMonths: JSON.parse(lockedMonths), 
-    holidays: holidays,
-    announcements: announcements
-  };
+  return { lockedMonths: JSON.parse(lockedMonths), holidays: holidays, announcements: announcements };
 }
 
 function saveLockedMonths(adminEmail, months) {
@@ -243,9 +231,7 @@ function getAnnouncements() {
   try {
     const data = announcementsSheet.getRange("A1").getValue();
     return data || "";
-  } catch (e) {
-    return "";
-  }
+  } catch (e) { return ""; }
 }
 
 function saveAnnouncements(adminEmail, announcementText) {
@@ -254,21 +240,15 @@ function saveAnnouncements(adminEmail, announcementText) {
     announcementsSheet.clearContents();
     announcementsSheet.getRange("A1").setValue(announcementText);
     return { status: "success", message: "Pengumuman berhasil diperbarui." };
-  } catch (e) {
-    return { status: "error", message: e.message };
-  }
+  } catch (e) { return { status: "error", message: e.message }; }
 }
 
-// --- FUNGSI UNTUK REKAP LAPORAN ---
+// --- FUNGSI UNTUK REKAP LAPORAN PDF ---
 
 function getSchoolList(adminEmail) {
-  if (!checkIfAdmin(adminEmail)) {
-    throw new Error("Akses ditolak.");
-  }
+  if (!checkIfAdmin(adminEmail)) throw new Error("Akses ditolak.");
   const usersData = usersSheet.getDataRange().getValues().slice(1);
-  const schools = usersData.map(row => row[3]);
-  const uniqueSchools = [...new Set(schools)].filter(Boolean);
-  return uniqueSchools;
+  return [...new Set(usersData.map(row => row[3]))].filter(Boolean);
 }
 
 function formatTimeToHHMM_or_Empty(dateObj) {
@@ -280,105 +260,148 @@ function formatTimeToHHMM_or_Empty(dateObj) {
 }
 
 function prepareMonthlyRekapForPrint(adminEmail, selectedMonthYear, selectedSchool) {
-  if (!checkIfAdmin(adminEmail)) {
-    return { success: false, error: "Akses ditolak. Fitur ini hanya untuk admin." };
-  }
+  if (!checkIfAdmin(adminEmail)) return { success: false, error: "Akses ditolak." };
+  return generateRekapPDF(selectedMonthYear, selectedSchool, null);
+}
+
+function prepareMyRekapForPrint(userEmail, selectedMonthYear) {
+  if (!userEmail) return { success: false, error: "Sesi tidak valid." };
+  return generateRekapPDF(selectedMonthYear, null, userEmail);
+}
+
+function prepareSchoolRekapForPrint(userEmail, selectedMonthYear, selectedSchool) {
+  if (!userEmail) return { success: false, error: "Sesi tidak valid." };
+  return generateRekapPDF(selectedMonthYear, selectedSchool, null);
+}
+
+/**
+ * FUNGSI INTI PENGHASIL PDF (DIGUNAKAN BERSAMA)
+ * Membuat laporan di sheet sementara, menghasilkan PDF, lalu menghapus sheet.
+ */
+function generateRekapPDF(selectedMonthYear, selectedSchool, singleUserEmail) {
+  let tempSheet;
   try {
     if (!selectedMonthYear || !/^\d{4}-\d{2}$/.test(selectedMonthYear)) {
-      return { success: false, error: "Format Tahun-Bulan tidak valid (YYYY-MM)." };
-    }
-    if (!selectedSchool) {
-      return { success: false, error: "Silakan pilih sekolah terlebih dahulu." };
+      return { success: false, error: "Format Bulan/Tahun tidak valid." };
     }
     const [yyyyStr, mmStr] = selectedMonthYear.split('-');
     const mm = parseInt(mmStr, 10);
     const yyyy = parseInt(yyyyStr, 10);
     const TIMEZONE = "GMT+8";
-    const cetakSheet = ss.getSheetByName("CETAK");
-    if (!cetakSheet) {
-      return { success: false, error: "Sheet 'CETAK' (template) tidak ditemukan." };
+    
+    tempSheet = ss.insertSheet(`Rekap_${new Date().getTime()}`);
+
+    const requiredColumns = 31;
+    const maxColumns = tempSheet.getMaxColumns();
+    if (maxColumns < requiredColumns) {
+      tempSheet.insertColumnsAfter(maxColumns, requiredColumns - maxColumns);
     }
+
     const allUsers = usersSheet.getDataRange().getValues().slice(1);
-    const daftarGuru = allUsers
-      .filter(user => user[4] === 'guru' && user[3] === selectedSchool)
-      .map(user => ({ email: user[0], name: user[2], school: user[3] }));
-    if (daftarGuru.length === 0) {
-      cetakSheet.clear();
-      cetakSheet.getRange("A1").setValue(`Tidak ada data guru untuk sekolah '${selectedSchool}' pada periode ini.`);
-      return { success: true, message: `Tidak ada data guru yang ditemukan untuk sekolah ${selectedSchool}.` };
+    let daftarGuru, fileNameSchoolPart;
+
+    if (singleUserEmail) {
+      const guruData = allUsers.find(user => user[0].toLowerCase() === singleUserEmail.toLowerCase());
+      if (!guruData) throw new Error("Data guru tidak ditemukan.");
+      daftarGuru = [{ email: guruData[0], name: guruData[2], school: guruData[3] }];
+      fileNameSchoolPart = guruData[2];
+    } else {
+      if (!selectedSchool) throw new Error("Sekolah wajib dipilih.");
+      daftarGuru = allUsers.filter(user => user[4] === 'guru' && user[3] === selectedSchool)
+                           .map(user => ({ email: user[0], name: user[2], school: user[3] }));
+      fileNameSchoolPart = selectedSchool;
     }
+
+    if (daftarGuru.length === 0) throw new Error(`Tidak ada data guru yang cocok.`);
+
     const attendanceValues = attendanceSheet.getDataRange().getValues().slice(1);
     const rekapData = {};
     attendanceValues.forEach(row => {
       const email = row[1]; const dateObj = row[4];
       if (dateObj instanceof Date && dateObj.getFullYear() === yyyy && (dateObj.getMonth() + 1) === mm) {
         const formattedDate = Utilities.formatDate(dateObj, TIMEZONE, "yyyy-MM-dd");
-        if (!rekapData[email]) { rekapData[email] = {}; }
+        if (!rekapData[email]) rekapData[email] = {};
         rekapData[email][formattedDate] = {
           checkIn: formatTimeToHHMM_or_Empty(row[5]),
           checkOut: formatTimeToHHMM_or_Empty(row[6])
         };
       }
     });
-    cetakSheet.clear();
+    
+    const jumlahHari = new Date(yyyy, mm, 0).getDate();
+    tempSheet.setColumnWidths(1, 31, 38);
+    if (jumlahHari < 31) tempSheet.setColumnWidths(jumlahHari + 1, 31 - jumlahHari, 26);
+    
     const tanggalAwalObj = new Date(yyyy, mm - 1, 1);
-    const tanggalAkhirObj = new Date(yyyy, mm, 0);
-    const jumlahHari = tanggalAkhirObj.getDate();
     const tanggalAwalFormatted = Utilities.formatDate(tanggalAwalObj, TIMEZONE, "yyyy-MM-dd");
-    const tanggalAkhirFormatted = Utilities.formatDate(tanggalAkhirObj, TIMEZONE, "yyyy-MM-dd");
-    cetakSheet.getRange("A1:AE1").merge();
-    cetakSheet.getRange("A1").setValue("Lap. Detail Absensi").setHorizontalAlignment("center").setVerticalAlignment("middle").setFontWeight("bold").setFontSize(14);
-    cetakSheet.getRange("A2:AE2").setVerticalAlignment("middle");
-    cetakSheet.getRange("A2").setValue(`Waktu Absen ${tanggalAwalFormatted} ~ ${tanggalAkhirFormatted}`);
-    cetakSheet.getRange("L2").setValue(`Tabulasi ${tanggalAkhirFormatted}`);
+    const tanggalAkhirFormatted = Utilities.formatDate(new Date(yyyy, mm, 0), TIMEZONE, "yyyy-MM-dd");
+    tempSheet.getRange("A1:AE1").merge();
+    tempSheet.getRange("A1").setValue("Lap. Detail Absensi").setHorizontalAlignment("center").setVerticalAlignment("middle").setFontWeight("bold").setFontSize(14);
+    tempSheet.getRange("A2:AE2").setVerticalAlignment("middle");
+    tempSheet.getRange("A2").setValue(`Waktu Absen ${tanggalAwalFormatted} ~ ${tanggalAkhirFormatted}`);
+    tempSheet.getRange("L2").setValue(`Tabulasi ${tanggalAkhirFormatted}`);
     const nomorTanggalHeader = Array.from({ length: 31 }, (_, i) => (i < jumlahHari ? i + 1 : ""));
-    cetakSheet.getRange(3, 1, 1, 31).setValues([nomorTanggalHeader]).setHorizontalAlignment("center").setVerticalAlignment("middle")
-      .setBorder(true, true, true, true, true, true, '#000000', SpreadsheetApp.BorderStyle.SOLID);
+    tempSheet.getRange(3, 1, 1, 31).setValues([nomorTanggalHeader]).setHorizontalAlignment("center").setVerticalAlignment("middle").setBorder(true, true, true, true, true, true, '#000000', SpreadsheetApp.BorderStyle.SOLID);
+    
     let barisSaatIni = 4;
     daftarGuru.forEach((guru, index) => {
-      const namaSekolah = guru.school || "";
-      const formatSekolah = namaSekolah.toUpperCase().replace(/ /g, "~");
-      cetakSheet.getRange(barisSaatIni, 1).setValue("ID:");
-      cetakSheet.getRange(barisSaatIni, 3).setValue(index + 1);
-      cetakSheet.getRange(barisSaatIni, 9).setValue("Nama:");
-      cetakSheet.getRange(barisSaatIni, 11).setValue(guru.name);
-      cetakSheet.getRange(barisSaatIni, 19).setValue("Dept.:");
-      cetakSheet.getRange(barisSaatIni, 21).setValue(formatSekolah);
-      const barisJamMasuk = barisSaatIni + 1;
-      const barisJamPulang = barisSaatIni + 2;
+      const formatSekolah = (guru.school || "").toUpperCase().replace(/ /g, "~");
+      tempSheet.getRange(barisSaatIni, 1).setValue("ID:");
+      tempSheet.getRange(barisSaatIni, 3).setValue(index + 1);
+      tempSheet.getRange(barisSaatIni, 9).setValue("Nama:");
+      tempSheet.getRange(barisSaatIni, 11).setValue(guru.name);
+      tempSheet.getRange(barisSaatIni, 19).setValue("Dept.:");
+      tempSheet.getRange(barisSaatIni, 21).setValue(formatSekolah);
+      
       const arrayJamMasuk = [], arrayJamPulang = [];
       for (let tgl = 1; tgl <= 31; tgl++) {
-        let jamMasukUntukHariIni = "", jamPulangUntukHariIni = "";
+        let jamMasuk = "", jamPulang = "";
         if (tgl <= jumlahHari) {
           const tglStr = `${yyyy}-${String(mm).padStart(2, '0')}-${String(tgl).padStart(2, '0')}`;
           const dataHarian = rekapData[guru.email] ? rekapData[guru.email][tglStr] : null;
-          if (dataHarian) {
-            jamMasukUntukHariIni = dataHarian.checkIn;
-            jamPulangUntukHariIni = dataHarian.checkOut;
-          }
+          if (dataHarian) { jamMasuk = dataHarian.checkIn; jamPulang = dataHarian.checkOut; }
         }
-        arrayJamMasuk.push(jamMasukUntukHariIni);
-        arrayJamPulang.push(jamPulangUntukHariIni);
+        arrayJamMasuk.push(jamMasuk);
+        arrayJamPulang.push(jamPulang);
       }
-      cetakSheet.getRange(barisJamMasuk, 1, 1, 31).setValues([arrayJamMasuk]);
-      cetakSheet.getRange(barisJamPulang, 1, 1, 31).setValues([arrayJamPulang]);
-      const blockRange = cetakSheet.getRange(barisSaatIni, 1, 3, 31);
+      tempSheet.getRange(barisSaatIni + 1, 1, 1, 31).setValues([arrayJamMasuk]);
+      tempSheet.getRange(barisSaatIni + 2, 1, 1, 31).setValues([arrayJamPulang]);
+      
+      const blockRange = tempSheet.getRange(barisSaatIni, 1, 3, 31);
       blockRange.setVerticalAlignment("middle").setHorizontalAlignment("center");
-      cetakSheet.getRange(barisSaatIni, 1).setHorizontalAlignment("left");
-      cetakSheet.getRange(barisSaatIni, 9).setHorizontalAlignment("left");
-      cetakSheet.getRange(barisSaatIni, 11).setHorizontalAlignment("left");
-      cetakSheet.getRange(barisSaatIni, 19).setHorizontalAlignment("left");
-      cetakSheet.getRange(barisSaatIni, 21).setHorizontalAlignment("left");
-      const infoRowRange = cetakSheet.getRange(barisSaatIni, 1, 1, 31);
-      const dataRowsRange = cetakSheet.getRange(barisSaatIni + 1, 1, 2, 31);
+      tempSheet.getRange(barisSaatIni, 1).setHorizontalAlignment("left");
+      tempSheet.getRange(barisSaatIni, 9).setHorizontalAlignment("left");
+      tempSheet.getRange(barisSaatIni, 11).setHorizontalAlignment("left");
+      tempSheet.getRange(barisSaatIni, 19).setHorizontalAlignment("left");
+      tempSheet.getRange(barisSaatIni, 21).setHorizontalAlignment("left");
+      
+      const infoRowRange = tempSheet.getRange(barisSaatIni, 1, 1, 31);
+      const dataRowsRange = tempSheet.getRange(barisSaatIni + 1, 1, 2, 31);
       infoRowRange.setBorder(true, true, true, true, false, false, '#000000', SpreadsheetApp.BorderStyle.SOLID);
       dataRowsRange.setBorder(null, true, true, true, true, false, '#000000', SpreadsheetApp.BorderStyle.SOLID);
       barisSaatIni += 3;
     });
+    
     SpreadsheetApp.flush();
-    return { success: true, message: `Sheet 'CETAK' berhasil disiapkan untuk periode ${selectedMonthYear}.` };
+
+    const spreadsheetId = ss.getId();
+    const sheetId = tempSheet.getSheetId();
+    const bulanNama = new Date(yyyy, mm - 1, 1).toLocaleString('id-ID', { month: 'long' });
+    const fileName = `Absensi ${fileNameSchoolPart} - ${bulanNama.toUpperCase()} ${yyyy}.pdf`;
+    const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=pdf&gid=${sheetId}&size=A4&scale=4&top_margin=0.393701&bottom_margin=0.393701&left_margin=0.393701&right_margin=0.393701&gridlines=false&printnotes=false&horizontal_alignment=CENTER&vertical_alignment=TOP`;
+    const token = ScriptApp.getOAuthToken();
+    const response = UrlFetchApp.fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
+    const blob = response.getBlob().setName(fileName);
+    const pdfData = Utilities.base64Encode(blob.getBytes());
+
+    return { success: true, pdfData, fileName };
+
   } catch (e) {
-    Logger.log(`Error di prepareMonthlyRekapForPrint: ${e.toString()}`);
-    return { success: false, error: `Gagal menyiapkan data cetak: ${e.message}` };
+    Logger.log(`Error di generateRekapPDF: ${e.toString()}`);
+    return { success: false, error: `Gagal membuat PDF: ${e.message}` };
+  } finally {
+    if (tempSheet) {
+      ss.deleteSheet(tempSheet);
+    }
   }
 }
