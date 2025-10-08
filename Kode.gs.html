@@ -154,8 +154,8 @@ function getMonthlyAttendance(email, year, month) {
       if (rowDateObj.getFullYear() === year && (rowDateObj.getMonth() + 1) === month) {
         const formattedDate = Utilities.formatDate(rowDateObj, TIMEZONE, "yyyy-MM-dd");
         attendanceData[formattedDate] = {
-          checkIn: row[5] instanceof Date ? Utilities.formatDate(row[5], TIMEZONE, "HH.mm") : "",
-          checkOut: row[6] instanceof Date ? Utilities.formatDate(row[6], TIMEZONE, "HH.mm") : "",
+          checkIn: row[5] instanceof Date ? Utilities.formatDate(row[5], TIMEZONE, "HH:mm") : "",
+          checkOut: row[6] instanceof Date ? Utilities.formatDate(row[6], TIMEZONE, "HH:mm") : "",
           reason: row[7] || ""
         };
       }
