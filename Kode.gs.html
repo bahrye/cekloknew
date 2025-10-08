@@ -110,40 +110,124 @@ function getAppSettingsForUser(email, year, month) {
   };
 }
 
-
 function saveMonthlyAttendance(payload) {
   const { email, name, school, attendance } = payload;
-  const allData = attendanceSheet.getDataRange().getValues();
+  const sheet = attendanceSheet; // Menggunakan variabel global 'attendanceSheet'
+  const allData = sheet.getDataRange().getValues();
   const TIMEZONE = "GMT+8";
   const existingRecords = {};
 
+  // Tentukan bulan dan tahun dari payload untuk memfilter data yang relevan
+  let payloadYear, payloadMonth;
+  const firstDateKey = Object.keys(attendance)[0];
+  if (firstDateKey) {
+    // Gunakan getUTCFullYear() dan getUTCMonth() untuk menghindari masalah zona waktu saat menentukan bulan & tahun
+    const d = new Date(firstDateKey);
+    payloadYear = d.getUTCFullYear();
+    payloadMonth = d.getUTCMonth() + 1;
+  } else {
+    // Jika tidak ada data di payload, tidak ada yang perlu disimpan.
+    return { status: "success", message: "Tidak ada data untuk disimpan." };
+  }
+
+  // ===================================================================
+  // FASE 1: BACA & KUMPULKAN DATA
+  // Kumpulkan semua record yang sudah ada untuk pengguna dan bulan yang relevan
+  // ===================================================================
   for (let i = 1; i < allData.length; i++) {
-    if (allData[i][1] === email && allData[i][4] instanceof Date) {
-      existingRecords[Utilities.formatDate(allData[i][4], TIMEZONE, "yyyy-MM-dd")] = { rowIndex: i + 1 };
+    const row = allData[i];
+    const recordEmail = row[1];
+    const recordDate = row[4];
+    
+    if (recordEmail === email && recordDate instanceof Date) {
+      if (recordDate.getFullYear() === payloadYear && (recordDate.getMonth() + 1) === payloadMonth) {
+        const dateStr = Utilities.formatDate(recordDate, TIMEZONE, "yyyy-MM-dd");
+        existingRecords[dateStr] = { 
+          rowIndex: i + 1,
+          checkIn: row[5],
+          checkOut: row[6],
+          reason: row[7]
+        };
+      }
     }
   }
+
+  // ===================================================================
+  // FASE 2: KEPUTUSAN
+  // Tentukan data mana yang akan ditambah, diupdate, atau dihapus
+  // ===================================================================
+  const rowsToDelete = [];
+  const rowsToUpdate = {}; // {rowIndex: [data_baru]}
+  const rowsToInsert = [];
 
   for (const date in attendance) {
     const entry = attendance[date];
-    // --- PERBAIKAN DIMULAI DI SINI ---
-    const checkInTime = entry.checkIn ? "'" + entry.checkIn : null;
-    const checkOutTime = entry.checkOut ? "'" + entry.checkOut : null;
-    // --- PERBAIKAN SELESAI ---
-    const reason = entry.reason || null;
+    const checkInValue = entry.checkIn || "";
+    const checkOutValue = entry.checkOut || "";
+    const reasonValue = entry.reason || "";
+    const isEntryEmpty = !checkInValue && !checkOutValue && !reasonValue;
 
     if (existingRecords[date]) {
-      if (!checkInTime && !checkOutTime && !reason) {
-        attendanceSheet.deleteRow(existingRecords[date].rowIndex);
+      // Record sudah ada di sheet
+      if (isEntryEmpty) {
+        // Data di UI kosong -> tandai untuk dihapus
+        rowsToDelete.push(existingRecords[date].rowIndex);
       } else {
-        const range = attendanceSheet.getRange(existingRecords[date].rowIndex, 6, 1, 3);
-        range.setValues([[checkInTime, checkOutTime, reason]]);
-        range.offset(0, 0, 1, 2).setNumberFormat("@");
+        // Data di UI ada -> bandingkan dengan data yang ada untuk melihat perlu diupdate atau tidak
+        const existing = existingRecords[date];
+        const existingCheckIn = existing.checkIn instanceof Date ? Utilities.formatDate(existing.checkIn, TIMEZONE, "HH:mm") : (existing.checkIn || "").toString().replace(/^'/, "");
+        const existingCheckOut = existing.checkOut instanceof Date ? Utilities.formatDate(existing.checkOut, TIMEZONE, "HH:mm") : (existing.checkOut || "").toString().replace(/^'/, "");
+        const existingReason = existing.reason || "";
+
+        if (checkInValue !== existingCheckIn || checkOutValue !== existingCheckOut || reasonValue !== existingReason) {
+          rowsToUpdate[existingRecords[date].rowIndex] = [
+            checkInValue ? `'${checkInValue}` : null,
+            checkOutValue ? `'${checkOutValue}` : null,
+            reasonValue || null
+          ];
+        }
       }
-    } else if (checkInTime || checkOutTime || reason) {
-      attendanceSheet.appendRow([new Date(), email, name, school, new Date(date), checkInTime, checkOutTime, reason]);
-      attendanceSheet.getRange(attendanceSheet.getLastRow(), 6, 1, 2).setNumberFormat("@");
+    } else {
+      // Record tidak ada di sheet
+      if (!isEntryEmpty) {
+        // Data di UI ada -> tandai untuk ditambahkan
+        rowsToInsert.push([
+          new Date(), email, name, school, new Date(date),
+          checkInValue ? `'${checkInValue}` : null,
+          checkOutValue ? `'${checkOutValue}` : null,
+          reasonValue || null
+        ]);
+      }
     }
   }
+  
+  // ===================================================================
+  // FASE 3: TULIS
+  // Lakukan semua operasi penulisan dalam urutan yang aman (Tambah -> Update -> Hapus)
+  // ===================================================================
+
+  // 1. Tambahkan baris baru (tidak mempengaruhi indeks yang ada)
+  if (rowsToInsert.length > 0) {
+    const startRow = sheet.getLastRow() + 1;
+    const range = sheet.getRange(startRow, 1, rowsToInsert.length, rowsToInsert[0].length);
+    range.setValues(rowsToInsert);
+    sheet.getRange(startRow, 6, rowsToInsert.length, 2).setNumberFormat("@");
+  }
+
+  // 2. Update baris yang ada (tidak mempengaruhi indeks lain)
+  for (const rowIndex in rowsToUpdate) {
+    const range = sheet.getRange(parseInt(rowIndex), 6, 1, 3);
+    range.setValues([rowsToUpdate[rowIndex]]);
+    range.offset(0, 0, 1, 2).setNumberFormat("@");
+  }
+  
+  // 3. Hapus baris dari bawah ke atas (dilakukan terakhir untuk menghindari pergeseran indeks)
+  if (rowsToDelete.length > 0) {
+    rowsToDelete.sort((a, b) => b - a).forEach(rowIndex => {
+      sheet.deleteRow(rowIndex);
+    });
+  }
+
   return { status: "success", message: "Absensi bulan ini berhasil diperbarui!" };
 }
 
