@@ -31,10 +31,11 @@
             <h3>Pengumuman</h3>
             <p id="announcement-text">Tidak ada pengumuman saat ini.</p>
           </div>
+
           <div id="summary-section">
               <div class="summary-title">
-                  <h3>Ringkasan Bulan Ini</h3>
-                  <span id="summary-month-display"></span>
+                  <h3>Ringkasan Bulanan</h3>
+                  <input type="month" id="summary-month-input" onchange="handleSummaryMonthChange()">
               </div>
               <div class="summary-grid">
                   <div class="summary-item">
@@ -64,22 +65,31 @@
               </div>
           </div>
           <hr style="margin: 25px 0;">
-          <h3>Unduh Rekap Pribadi</h3>
+          
+          <h3>Unduh Rekap</h3>
           <div class="input-group">
               <label for="guru-rekap-month">Pilih Bulan dan Tahun</label>
               <input type="month" id="guru-rekap-month">
           </div>
-          <button onclick="handleGuruDownloadRekap()" id="guru-download-rekap-button" style="width: 100%; margin-top: 10px;">
+          
+          <button onclick="handleGuruDownloadRekap()" id="guru-download-rekap-button" class="action-button">
               Buat & Unduh Rekap Saya
           </button>
-          <p id="guru-rekap-message" class="message"></p>
-          <button onclick="handleGuruDownloadAllRekap()" id="guru-download-all-rekap-button" class="action-button secondary" style="margin-top: 10px; background-color: #6B7280;">
+          <p id="guru-rekap-message" class="message" style="margin-top: 5px; margin-bottom: 10px;"></p>
+          
+          <button onclick="handleGuruDownloadAllRekap()" id="guru-download-all-rekap-button" class="action-button secondary" style="margin-top: -5px;">
               Unduh Rekap Semua Guru (Satu Sekolah)
           </button>
-          <p id="guru-rekap-all-message" class="message"></p>
-          <div class="dashboard-actions">
+          <p id="guru-rekap-all-message" class="message" style="margin-top: 5px;"></p>
+
+          <hr style="margin: 25px 0; border: none; border-top: 1px solid #E5E7EB;">
+
+          <div class="dashboard-actions" style="margin-top: 0;">
             <button id="ceklok-button" class="action-button" onclick="showCeklokPage()">
               <span>Isi Ceklok Kehadiran</span>
+            </button>
+            <button id="setting-libur-button" class="action-button secondary" onclick="showTeacherHolidaySettings()">
+              <span>Setting Hari Libur Guru</span>
             </button>
             <button class="logout" onclick="handleLogout()">Logout</button>
           </div>
@@ -99,6 +109,18 @@
           <div id="attendance-table-container"></div>
           <button id="save-button" onclick="handleSave()">Simpan Semua Perubahan</button>
           <p id="save-message" class="message"></p>
+        </div>
+      </div>
+      
+      <div id="teacher-holiday-settings-container" style="display:none;">
+        <div class="card">
+            <button class="back-button" onclick="showGuruDashboard()">&larr; Kembali ke Dasbor</button>
+            <h2 style="margin-top: 15px;">Pengaturan Hari Libur Mengajar</h2>
+            <p>Pilih hari di mana Anda tidak ada jadwal mengajar. Hari yang dipilih akan otomatis ditandai sebagai "Hari Libur Sekolah" pada halaman absensi.</p>
+            <div id="holiday-switches-container">
+            </div>
+            <button id="save-teacher-holidays-button" onclick="handleSaveTeacherHolidays()">Simpan Pengaturan</button>
+            <p id="teacher-holidays-message" class="message"></p>
         </div>
       </div>
       
@@ -184,7 +206,7 @@
       // ===================================================================
       let currentUser = null;
       let currentDate = new Date();
-      let appSettings = { lockedMonths: [], holidays: {}, announcements: "" };
+      let appSettings = { lockedMonths: [], holidays: {}, announcements: "", teacherHolidays: [] };
       const SPREADSHEET_ID = "1EIQY1DeGcwhEaYojbGMah-S5HbtsrON5YRy37bl_vLg";
 
       // ===================================================================
@@ -202,7 +224,6 @@
       // ===================================================================
       // INISIALISASI & OTENTIKASI
       // ===================================================================
-      // GANTI BLOK LAMA DENGAN VERSI BARU INI
       document.addEventListener('DOMContentLoaded', () => {
         const userSession = sessionStorage.getItem('ceklokUser');
         if (userSession) {
@@ -213,23 +234,14 @@
             showGuruDashboard(currentUser);
           }
         }
-
-        // --- PENAMBAHAN FUNGSI ENTER UNTUK LOGIN ---
         const emailInput = document.getElementById('email');
         const passwordInput = document.getElementById('password');
-
-        // Fungsi yang akan dijalankan ketika tombol ditekan
         const loginOnEnter = (event) => {
-          // Periksa jika tombol yang ditekan adalah 'Enter'
           if (event.key === 'Enter') {
-            // Mencegah aksi default browser
             event.preventDefault();
-            // Panggil fungsi login
             handleLogin();
           }
         };
-
-        // Terapkan fungsi di atas ke kedua input field
         emailInput.addEventListener('keyup', loginOnEnter);
         passwordInput.addEventListener('keyup', loginOnEnter);
       });
@@ -276,6 +288,7 @@
         document.getElementById("guru-dashboard-container").style.display = "none";
         document.getElementById("ceklok-container").style.display = "none";
         document.getElementById("admin-container").style.display = "none";
+        document.getElementById("teacher-holiday-settings-container").style.display = "none";
         document.getElementById('email').value = "";
         document.getElementById('password').value = "";
         displayMessage('login-message', "Anda berhasil logout.", true);
@@ -289,28 +302,36 @@
       // ===================================================================
       // LOGIKA UNTUK GURU
       // ===================================================================
-      // GANTI FUNGSI LAMA DENGAN YANG INI
       function showGuruDashboard(userData) {
           if (userData) currentUser = userData;
           document.getElementById("login-container").style.display = "none";
           document.getElementById("ceklok-container").style.display = "none";
           document.getElementById("admin-container").style.display = "none";
+          document.getElementById("teacher-holiday-settings-container").style.display = "none";
           document.getElementById("guru-dashboard-container").style.display = "block";
           document.getElementById("guru-welcome-message").innerHTML = `Halo, <strong>${currentUser.name}</strong><br><small>${currentUser.school}</small>`;
           
-          // Memuat pengumuman
           google.script.run.withSuccessHandler(response => {
               renderAnnouncements(response.announcements);
           }).getAppSettingsForUser(currentUser.email, currentDate.getFullYear(), currentDate.getMonth() + 1);
 
-          // Memuat ringkasan kehadiran untuk bulan ini
+          // Panggil fungsi untuk memuat ringkasan bulan berjalan
           loadAndRenderSummary();
       }
       
       function showCeklokPage() {
         document.getElementById("guru-dashboard-container").style.display = "none";
+        document.getElementById("teacher-holiday-settings-container").style.display = "none";
         document.getElementById("ceklok-container").style.display = "block";
         loadMonthData(currentDate);
+      }
+
+      function showTeacherHolidaySettings() {
+        document.getElementById("guru-dashboard-container").style.display = "none";
+        document.getElementById("ceklok-container").style.display = "none";
+        document.getElementById("teacher-holiday-settings-container").style.display = "block";
+        renderTeacherHolidaySwitches();
+        loadTeacherHolidays();
       }
       
       function renderAnnouncements(text) {
@@ -326,14 +347,15 @@
       function loadMonthData(date){
          const year = date.getFullYear();
          const month = date.getMonth() + 1;
-         document.getElementById('month-display').innerText = date.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+         document.getElementById('month-display').innerText = date.toLocaleString('id-ID', { month: 'long', year: 'numeric' });
          document.getElementById('attendance-table-container').innerHTML = '<div>Memuat data...</div>';
          google.script.run
           .withSuccessHandler(response => {
             appSettings = {
               lockedMonths: response.lockedMonths || [],
               holidays: response.holidays || {},
-              announcements: response.announcements || ""
+              announcements: response.announcements || "",
+              teacherHolidays: response.teacherHolidays || []
             };
             generateMonthTable(year, month, response.attendance);
           })
@@ -355,17 +377,26 @@
         document.getElementById('global-lock-message').innerText = lockMessage;
         document.getElementById('save-button').disabled = isMonthLocked || isFutureMonth;
         let tableHTML = '<table><thead><tr><th>Tanggal</th><th>Jam Masuk</th><th>Jam Pulang</th><th>Keterangan</th><th>Aksi</th></tr></thead><tbody>';
+        
         for (let day = 1; day <= daysInMonth; day++) {
           const dateStr = `${currentMonthStr}-${String(day).padStart(2, '0')}`;
           const dateObj = new Date(year, month - 1, day);
-          const dayName = dateObj.toLocaleDateString('id-ID', { weekday: 'short' });
-          const isSunday = dateObj.getDay() === 0;
+          const dayOfWeek = dateObj.getDay();
+          const dayName = dateObj.toLocaleString('id-ID', { weekday: 'short' });
+          const isSunday = dayOfWeek === 0;
           const isHoliday = !!appSettings.holidays[dateStr];
+          const isTeacherHoliday = appSettings.teacherHolidays[dayOfWeek - 1] && dayOfWeek !== 0; 
+          const existingData = attendanceData[dateStr];
+          
           if (isHoliday) {
             tableHTML += `<tr id="row-${dateStr}" class="holiday-row"><td>${day} <small>(${dayName})</small></td><td colspan="3">${appSettings.holidays[dateStr]}</td><td></td></tr>`;
           } else if (isSunday) {
             tableHTML += `<tr id="row-${dateStr}" class="sunday-row"><td>${day} <small>(${dayName})</small></td><td colspan="3">Hari Libur</td><td></td></tr>`;
-          } else {
+          } 
+          else if (isTeacherHoliday && (!existingData || (existingData.checkIn === "" && existingData.checkOut === "" && existingData.reason === ""))) {
+              tableHTML += `<tr id="row-${dateStr}"><td>${day} <small>(${dayName})</small></td><td><input type="time" id="in-${dateStr}" disabled></td><td><input type="time" id="out-${dateStr}" disabled></td><td><select id="reason-${dateStr}" onchange="handleReasonChange(event)"><option value="Hari Libur Sekolah" selected>Hari Libur Sekolah</option><option value="">-- Pilih Alasan Lain --</option><option value="Cuti Tahunan">Cuti Tahunan</option><option value="Dinas Luar">Dinas Luar</option></select></td><td><button class="clear-btn" onclick="handleClearRow(event)">Hapus</button></td></tr>`;
+          }
+          else {
             const isDisabled = isMonthLocked || isFutureMonth;
             tableHTML += `<tr id="row-${dateStr}"><td>${day} <small>(${dayName})</small></td><td><input type="time" id="in-${dateStr}" ${isDisabled ? 'disabled' : ''}></td><td><input type="time" id="out-${dateStr}" ${isDisabled ? 'disabled' : ''}></td><td><select id="reason-${dateStr}" ${isDisabled ? 'disabled' : ''} onchange="handleReasonChange(event)"><option value="">-- Pilih Alasan --</option><option value="Hari Libur Sekolah">Hari Libur Sekolah</option><option value="Cuti Tahunan">Cuti Tahunan</option><option value="Dinas Luar">Dinas Luar</option></select></td><td><button class="clear-btn" onclick="handleClearRow(event)" ${isDisabled ? 'disabled' : ''}>Hapus</button></td></tr>`;
           }
@@ -415,47 +446,32 @@
         if (reasonSelect) reasonSelect.value = '';
       }
       
-      // GANTI FUNGSI LAMA DENGAN VERSI BARU YANG SUDAH DIPERBAIKI INI
       function handleSave() {
           const button = document.getElementById('save-button');
-          
-          // Hapus highlight error dari simpan sebelumnya
           document.querySelectorAll('#attendance-table-container tr.invalid-row').forEach(row => {
               row.classList.remove('invalid-row');
           });
-
           const payload = { email: currentUser.email, name: currentUser.name, school: currentUser.school, attendance: {} };
           const rows = document.querySelectorAll('#attendance-table-container tbody tr');
           let validationError = false;
           let firstErrorRow = null;
-
           rows.forEach(row => {
               const date = row.id.replace('row-', '');
-              // Lewati baris yang bukan baris data (seperti baris libur)
               if (!date || !row.querySelector('input[type="time"]')) return;
-
               const checkInInput = row.querySelector('input[type="time"]');
               const checkOutInput = row.querySelectorAll('input[type="time"]')[1];
               const reasonSelect = row.querySelector('select');
-
               const checkIn = checkInInput ? checkInInput.value : "";
               const checkOut = checkOutInput ? checkOutInput.value : "";
               const reason = reasonSelect ? reasonSelect.value : "";
-              
               const hasCheckIn = checkIn && checkIn.trim() !== "";
               const hasCheckOut = checkOut && checkOut.trim() !== "";
               const hasReason = reason && reason.trim() !== "";
-
-              // Validasi: Jika salah satu jam diisi (dan tidak ada alasan), pasangannya wajib diisi
               if (!hasReason && ((hasCheckIn && !hasCheckOut) || (!hasCheckIn && hasCheckOut))) {
                   validationError = true;
                   row.classList.add('invalid-row');
-                  if (!firstErrorRow) firstErrorRow = row; // Simpan baris error pertama
+                  if (!firstErrorRow) firstErrorRow = row;
               }
-
-              // --- INI BAGIAN PERBAIKANNYA ---
-              // Selalu tambahkan data baris ke payload, bahkan jika kosong.
-              // Ini memastikan bahwa server akan menghapus data jika pengguna mengosongkannya di form.
               payload.attendance[date] = { 
                   checkIn: hasReason ? "" : (checkIn || ""), 
                   checkOut: hasReason ? "" : (checkOut || ""), 
@@ -468,19 +484,17 @@
               if (firstErrorRow) {
                   firstErrorRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
               }
-              return; // Hentikan proses simpan
+              return;
           }
-
           button.disabled = true;
           button.textContent = "Menyimpan...";
           document.getElementById('save-message').innerText = "";
-          
           google.script.run
               .withSuccessHandler(r => {
                   displayMessage('save-message', r.message, true);
                   button.textContent = "Simpan Semua Perubahan";
                   loadMonthData(currentDate); 
-                  loadAndRenderSummary(); // Muat ulang summary setelah berhasil menyimpan
+                  loadAndRenderSummary();
               })
               .withFailureHandler(e => {
                   displayMessage('save-message', "Error: " + e.message);
@@ -490,38 +504,119 @@
               .saveMonthlyAttendance(payload);
       }
 
-      // TAMBAHKAN DUA FUNGSI BARU INI
-      function loadAndRenderSummary() {
-          const year = currentDate.getFullYear();
-          const month = currentDate.getMonth() + 1;
+      // --- FUNGSI BARU DAN MODIFIKASI UNTUK RINGKASAN INTERAKTIF ---
 
-          // Tampilkan nama bulan pada ringkasan
-          document.getElementById('summary-month-display').innerText = 
-              currentDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+      // Fungsi ini dimodifikasi untuk menerima parameter tahun dan bulan
+      function loadAndRenderSummary(year, month) {
+          const targetDate = (year && month) ? new Date(year, month - 1) : new Date();
+          const targetYear = targetDate.getFullYear();
+          const targetMonth = targetDate.getMonth() + 1;
 
-          // Panggil backend untuk mendapatkan data ringkasan
+          // Set nilai default untuk input bulan jika belum ada
+          const summaryMonthInput = document.getElementById('summary-month-input');
+          if (!summaryMonthInput.value) {
+            summaryMonthInput.value = `${targetYear}-${String(targetMonth).padStart(2, '0')}`;
+          }
+
+          // Reset tampilan ringkasan
+          const summaryValues = document.querySelectorAll('.summary-value');
+          summaryValues.forEach(el => el.innerText = '...');
+
           google.script.run
               .withSuccessHandler(response => {
                   if (response.success) {
                       renderSummary(response.summary);
                   } else {
                       console.error("Gagal memuat ringkasan:", response.error);
+                      summaryValues.forEach(el => el.innerText = '-'); // Tampilkan strip jika gagal
                   }
               })
               .withFailureHandler(error => {
                   console.error("Error server saat memuat ringkasan:", error.message);
+                  summaryValues.forEach(el => el.innerText = '-'); // Tampilkan strip jika error
               })
-              .getAttendanceSummary(currentUser.email, year, month);
+              .getAttendanceSummary(currentUser.email, targetYear, targetMonth);
       }
 
-      // GANTI FUNGSI LAMA DENGAN VERSI BARU INI
+      // Fungsi baru untuk menangani perubahan pada input bulan
+      function handleSummaryMonthChange() {
+        const monthInputValue = document.getElementById('summary-month-input').value;
+        if (monthInputValue) {
+          const [year, month] = monthInputValue.split('-').map(Number);
+          loadAndRenderSummary(year, month);
+        }
+      }
+      
       function renderSummary(summary) {
           document.getElementById('summary-hari-kerja').innerText = summary.hariKerja;
           document.getElementById('summary-kehadiran').innerText = summary.kehadiran;
           document.getElementById('summary-alpa').innerText = summary.alpa;
           document.getElementById('summary-alasan').innerText = summary.alasan;
           document.getElementById('summary-persentase').innerText = summary.persentase + '%';
-          document.getElementById('summary-ceklok').innerText = summary.ceklok; // <-- BARIS BARU
+          document.getElementById('summary-ceklok').innerText = summary.ceklok;
+      }
+      
+      function renderTeacherHolidaySwitches() {
+          const container = document.getElementById('holiday-switches-container');
+          const days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+          let html = '';
+          days.forEach((day, index) => {
+              html += `
+                  <div class="switch-row">
+                      <span>${day}</span>
+                      <label class="switch">
+                          <input type="checkbox" id="day-switch-${index}">
+                          <span class="slider round"></span>
+                      </label>
+                  </div>
+              `;
+          });
+          container.innerHTML = html;
+      }
+
+      function loadTeacherHolidays() {
+        const button = document.getElementById('save-teacher-holidays-button');
+        button.disabled = true;
+        button.textContent = 'Memuat...';
+        google.script.run
+            .withSuccessHandler(settings => {
+                if (settings && settings.length === 6) {
+                    settings.forEach((isHoliday, index) => {
+                        const checkbox = document.getElementById(`day-switch-${index}`);
+                        if (checkbox) checkbox.checked = isHoliday;
+                    });
+                }
+                button.disabled = false;
+                button.textContent = 'Simpan Pengaturan';
+            })
+            .withFailureHandler(err => {
+                displayMessage('teacher-holidays-message', 'Gagal memuat pengaturan: ' + err.message);
+                button.disabled = false;
+                button.textContent = 'Simpan Pengaturan';
+            })
+            .getTeacherHolidays(currentUser.email);
+      }
+
+      function handleSaveTeacherHolidays() {
+          const button = document.getElementById('save-teacher-holidays-button');
+          const settings = [];
+          for (let i = 0; i < 6; i++) {
+              settings.push(document.getElementById(`day-switch-${i}`).checked);
+          }
+          button.disabled = true;
+          button.textContent = 'Menyimpan...';
+          google.script.run
+              .withSuccessHandler(response => {
+                  displayMessage('teacher-holidays-message', response.message, true);
+                  button.disabled = false;
+                  button.textContent = 'Simpan Pengaturan';
+              })
+              .withFailureHandler(err => {
+                  displayMessage('teacher-holidays-message', 'Gagal menyimpan: ' + err.message);
+                  button.disabled = false;
+                  button.textContent = 'Simpan Pengaturan';
+              })
+              .saveTeacherHolidays(currentUser.email, settings);
       }
 
       // ===================================================================
@@ -666,12 +761,10 @@
             .getSchoolList(currentUser.email);
       }
 
-      // Ganti seluruh fungsi handleDownloadRekap dengan yang ini
       function handleDownloadRekap() {
           const schoolInput = document.getElementById('rekap-school').value;
           const monthInput = document.getElementById('rekap-month').value;
           const button = document.getElementById('download-rekap-button');
-          
           if (!schoolInput) {
               displayMessage('rekap-message', 'Silakan pilih sekolah terlebih dahulu.');
               return;
@@ -680,24 +773,18 @@
               displayMessage('rekap-message', 'Silakan pilih bulan dan tahun terlebih dahulu.');
               return;
           }
-
           button.disabled = true;
           button.textContent = 'Membuat PDF...';
           displayMessage('rekap-message', 'Sedang memproses & membuat PDF, mohon tunggu...', true);
-
           google.script.run
               .withSuccessHandler(response => {
                   if (response.success) {
-                      // Membuat link unduhan dari data base64
                       const link = document.createElement('a');
                       link.href = `data:application/pdf;base64,${response.pdfData}`;
                       link.download = response.fileName;
-                      
-                      // Memicu klik untuk memulai unduhan
                       document.body.appendChild(link);
                       link.click();
                       document.body.removeChild(link);
-
                       displayMessage('rekap-message', 'PDF berhasil dibuat dan sedang diunduh!', true);
                   } else {
                       displayMessage('rekap-message', 'Error: ' + response.error);
@@ -723,20 +810,16 @@
         evt.currentTarget.className += " active";
       }
 
-      // Tambahkan fungsi baru ini di bagian // LOGIKA UNTUK GURU
       function handleGuruDownloadRekap() {
           const monthInput = document.getElementById('guru-rekap-month').value;
           const button = document.getElementById('guru-download-rekap-button');
-
           if (!monthInput) {
               displayMessage('guru-rekap-message', 'Silakan pilih bulan dan tahun terlebih dahulu.');
               return;
           }
-
           button.disabled = true;
           button.textContent = 'Membuat PDF...';
           displayMessage('guru-rekap-message', 'Sedang memproses & membuat PDF, mohon tunggu...', true);
-
           google.script.run
               .withSuccessHandler(response => {
                   if (response.success) {
@@ -761,29 +844,21 @@
               .prepareMyRekapForPrint(currentUser.email, monthInput);
       }
 
-      // Tambahkan fungsi baru ini di bagian // LOGIKA UNTUK GURU
       function handleGuruDownloadAllRekap() {
-          // Menggunakan input bulan yang sama dengan rekap pribadi
           const monthInput = document.getElementById('guru-rekap-month').value; 
           const button = document.getElementById('guru-download-all-rekap-button');
-
           if (!monthInput) {
               displayMessage('guru-rekap-all-message', 'Silakan pilih bulan dan tahun di atas terlebih dahulu.');
               return;
           }
-
-          // Menggunakan informasi sekolah dari guru yang sedang login
           const userSchool = currentUser.school;
           if (!userSchool) {
               displayMessage('guru-rekap-all-message', 'Informasi sekolah Anda tidak ditemukan.');
               return;
           }
-
           button.disabled = true;
           button.textContent = 'Membuat PDF...';
           displayMessage('guru-rekap-all-message', 'Sedang memproses rekap semua guru, ini mungkin perlu waktu lebih lama...', true);
-
-          // Memanggil fungsi rekap yang sama dengan yang digunakan admin
           google.script.run
               .withSuccessHandler(response => {
                   if (response.success) {
@@ -805,7 +880,7 @@
                   button.disabled = false;
                   button.textContent = 'Unduh Rekap Semua Guru (Satu Sekolah)';
               })
-              .prepareSchoolRekapForPrint(currentUser.email, monthInput, userSchool); // Mengirim email & bulan (sama), dan nama sekolah guru ybs
+              .prepareSchoolRekapForPrint(currentUser.email, monthInput, userSchool);
       }
     </script>
   </body>
