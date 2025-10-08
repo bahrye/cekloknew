@@ -331,7 +331,7 @@ function parseTimeFromExcel(cellValue) {
   return "";
 }
 
-
+// --- FUNGSI IMPORT EMIS DENGAN PESAN SUKSES DINAMIS ---
 function importFromEmis(userEmail, fileData) {
   let tempFileId = null;
   try {
@@ -350,14 +350,47 @@ function importFromEmis(userEmail, fileData) {
     if (data.length < 2) {
       throw new Error("File Excel kosong atau tidak memiliki data.");
     }
+    
+    let lockedMonths = [];
+    try {
+      const settingsData = settingsSheet.getDataRange().getValues();
+      settingsData.forEach(row => {
+        if (row[0] === 'locked_months' && row[1]) {
+          lockedMonths = JSON.parse(row[1]);
+        }
+      });
+    } catch (e) { /* Abaikan jika parsing gagal */ }
 
     const headers = data[0].map(h => h.toString().trim().toUpperCase());
     const dateIndex = headers.indexOf("TANGGAL");
+
+    if (dateIndex === -1) {
+      throw new Error("Header kolom 'TANGGAL' tidak ditemukan.");
+    }
+    
+    // --- PERBAIKAN: Tangkap info bulan & tahun untuk dikirim kembali ---
+    let importYear, importMonth, importMonthName;
+    if (data[1] && data[1][dateIndex]) {
+        const firstDateStr = parseDateFromExcel(data[1][dateIndex]);
+        if (firstDateStr) {
+            const importMonthStr = firstDateStr.substring(0, 7);
+            if (lockedMonths.includes(importMonthStr)) {
+                throw new Error(`Gagal: Absensi untuk bulan ${importMonthStr} telah dikunci dan tidak dapat diubah lagi.`);
+            }
+            // Simpan informasi bulan dan tahun
+            const firstDateObj = new Date(firstDateStr);
+            importYear = firstDateObj.getUTCFullYear();
+            importMonth = firstDateObj.getUTCMonth() + 1; // getUTCMonth() is 0-11
+            importMonthName = firstDateObj.toLocaleString('id-ID', { month: 'long', timeZone: 'UTC' });
+        }
+    }
+    // --- PERBAIKAN SELESAI ---
+
     const checkInIndex = headers.indexOf("JAM MASUK");
     const checkOutIndex = headers.indexOf("JAM PULANG");
     const reasonIndex = headers.indexOf("ALASAN TIDAK HADIR");
 
-    if (dateIndex === -1 || checkInIndex === -1 || checkOutIndex === -1 || reasonIndex === -1) {
+    if (checkInIndex === -1 || checkOutIndex === -1 || reasonIndex === -1) {
       throw new Error("Header kolom tidak sesuai. Pastikan ada: TANGGAL, JAM MASUK, JAM PULANG, ALASAN TIDAK HADIR.");
     }
 
@@ -379,7 +412,6 @@ function importFromEmis(userEmail, fileData) {
       const row = data[i];
       const dateStr = parseDateFromExcel(row[dateIndex]);
       
-      // Jika tanggal tidak valid, lewati baris ini
       if (!dateStr) {
         Logger.log(`Baris ${i+1} dilewati karena format tanggal tidak valid: ${row[dateIndex]}`);
         continue;
@@ -396,7 +428,8 @@ function importFromEmis(userEmail, fileData) {
       };
     }
     
-    if (Object.keys(attendancePayload.attendance).length === 0) {
+    const importedCount = Object.keys(attendancePayload.attendance).length;
+    if (importedCount === 0) {
       throw new Error("Tidak ada baris data yang valid ditemukan di dalam file. Periksa kembali format tanggal (YYYY-MM-DD) dan waktu (HH:mm) Anda.");
     }
     
@@ -404,8 +437,15 @@ function importFromEmis(userEmail, fileData) {
     if(result.status !== 'success') {
       throw new Error(result.message);
     }
-
-    return { status: "success", message: `Berhasil mengimpor ${Object.keys(attendancePayload.attendance).length} baris data kehadiran.` };
+    
+    // --- PERBAIKAN: Kirim kembali response yang lebih detail ---
+    return { 
+        status: "success", 
+        count: importedCount,
+        year: importYear,
+        month: importMonth, // Format angka 1-12
+        monthName: importMonthName
+    };
 
   } catch (e) {
     Logger.log("Error di importFromEmis: " + e.toString() + " | Stack: " + e.stack);
@@ -722,50 +762,72 @@ function generateRekapPDF(selectedMonthYear, selectedSchool, singleUserEmail) {
   }
 }
 
+// --- FUNGSI RINGKASAN DENGAN PERHITUNGAN REAL-TIME YANG AKURAT ---
 function getAttendanceSummary(userEmail, year, month) {
   try {
+    // 1. Ambil data libur nasional
     const holidaysData = holidaysSheet.getDataRange().getValues().slice(1);
-    const holidays = {};
+    const nationalHolidays = {};
     holidaysData.forEach(row => {
       if (row[0] instanceof Date && row[1]) {
-        holidays[Utilities.formatDate(row[0], "GMT", "yyyy-MM-dd")] = row[1];
+        nationalHolidays[Utilities.formatDate(row[0], "GMT", "yyyy-MM-dd")] = row[1];
       }
     });
 
+    // 2. Ambil data libur mengajar guru (Teacher Holidays)
+    const teacherHolidays = getTeacherHolidays(userEmail); // Menggunakan kembali fungsi yang sudah ada
+
+    // 3. Ambil data absensi bulanan
     const attendanceData = getMonthlyAttendance(userEmail, year, month);
     const daysInMonth = new Date(year, month, 0).getDate();
 
     let hariKerja = 0;
     let kehadiran = 0;
-    let alasan = 0;
+    let alpa = 0;
+    let alasanLain = 0; // Untuk Cuti, Dinas Luar, dll.
+    let liburSekolah = 0; // Khusus untuk "Hari Libur Sekolah"
 
     for (let day = 1; day <= daysInMonth; day++) {
-      const dateObj = new Date(year, month - 1, day);
+      const dateObj = new Date(Date.UTC(year, month - 1, day));
       const dateStr = Utilities.formatDate(dateObj, "GMT", "yyyy-MM-dd");
       
-      const isSunday = dateObj.getDay() === 0;
-      const isHoliday = !!holidays[dateStr];
+      const dayOfWeek = dateObj.getUTCDay(); // 0=Minggu, 1=Senin, ..., 6=Sabtu
+      const isSunday = dayOfWeek === 0;
+      const isNationalHoliday = !!nationalHolidays[dateStr];
+      // Cek apakah ini hari libur mengajar guru (Senin-Sabtu -> index 0-5)
+      const isTeacherHoliday = dayOfWeek > 0 && teacherHolidays[dayOfWeek - 1];
 
-      if (!isSunday && !isHoliday) {
+      // Sebuah hari dianggap hari kerja jika BUKAN hari Minggu DAN BUKAN hari libur nasional
+      if (!isSunday && !isNationalHoliday) {
         hariKerja++;
         
         const entry = attendanceData[dateStr];
-        if (entry) {
-          const hasCheckIn = entry.checkIn && entry.checkIn.trim() !== "";
-          const hasCheckOut = entry.checkOut && entry.checkOut.trim() !== "";
-          const hasReason = entry.reason && entry.reason.trim() !== "";
 
-          if (hasReason) {
-            alasan++;
-          } else if (hasCheckIn && hasCheckOut) {
-            kehadiran++;
-          }
+        if (entry) {
+            if (entry.reason) {
+                if (entry.reason === "Hari Libur Sekolah") {
+                    liburSekolah++;
+                } else {
+                    alasanLain++;
+                }
+            } else if (entry.checkIn && entry.checkOut) {
+                kehadiran++;
+            }
+        } 
+        // --- LOGIKA BARU: Jika tidak ada data absensi, cek apakah seharusnya libur mengajar ---
+        else if (isTeacherHoliday) {
+            liburSekolah++;
         }
       }
     }
-
-    const alpa = hariKerja - (kehadiran + alasan);
-    const totalCeklok = kehadiran + alasan;
+    
+    // Hitung alpa: hari kerja dikurangi semua jenis kehadiran dan alasan
+    alpa = hariKerja - (kehadiran + liburSekolah + alasanLain);
+    // Pastikan alpa tidak negatif
+    if (alpa < 0) alpa = 0; 
+    
+    // Ceklok adalah total semua entri yang tercatat (hadir + semua alasan)
+    const totalCeklok = kehadiran + liburSekolah + alasanLain;
     const persentase = (hariKerja > 0) ? Math.round((totalCeklok / hariKerja) * 100) : 0;
 
     return {
@@ -774,12 +836,14 @@ function getAttendanceSummary(userEmail, year, month) {
         hariKerja: hariKerja,
         kehadiran: kehadiran,
         alpa: alpa,
-        alasan: alasan,
+        // Di UI, 'alasan' sekarang akan menampilkan gabungan libur sekolah + alasan lain
+        alasan: liburSekolah + alasanLain,
         persentase: persentase,
         ceklok: totalCeklok
       }
     };
   } catch(e) {
+    Logger.log("Error di getAttendanceSummary: " + e.message);
     return { success: false, error: e.message };
   }
 }
