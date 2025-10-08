@@ -436,4 +436,87 @@
     width: 18px;
     height: 18px;
   }
+
+  /* --- Style untuk Ringkasan Kehadiran di Dasbor Guru --- */
+  #summary-section {
+    margin-top: 25px;
+    margin-bottom: 25px;
+    padding: 20px;
+    background-color: #F9FAFB;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    text-align: left;
+  }
+
+  .summary-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 18px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border-color);
+  }
+
+  .summary-title h3 {
+    margin: 0;
+    font-size: 16px;
+    color: var(--text-primary-color);
+  }
+
+  .summary-title span {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-secondary-color);
+  }
+
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+  }
+
+  .summary-item {
+    background-color: #FFFFFF;
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid #E5E7EB;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .summary-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--primary-color);
+  }
+
+  .summary-label {
+    font-size: 13px;
+    color: var(--text-secondary-color);
+    margin-top: 4px;
+  }
+
+  /* --- Style untuk baris input yang tidak valid --- */
+  tr.invalid-row {
+    background-color: #FEF2F2 !important; /* Warna merah muda lembut */
+  }
+  tr.invalid-row td {
+    border-top: 1px solid #F87171 !important;
+    border-bottom: 1px solid #F87171 !important;
+  }
+  tr.invalid-row td:first-child {
+    border-left: 1px solid #F87171 !important;
+  }
+  tr.invalid-row td:last-child {
+    border-right: 1px solid #F87171 !important;
+  }
+
+  /* --- Penyesuaian Grid Ringkasan untuk 5 Item --- */
+  .summary-grid {
+    display: grid;
+    /* Dibuat responsif agar terlihat bagus di semua ukuran layar */
+    grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+    gap: 15px;
+  }
 </style>
