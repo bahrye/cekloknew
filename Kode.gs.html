@@ -1,11 +1,10 @@
 /**
  * ===================================================================
  * APLIKASI CEKLOK GURU & ADMIN
- * Backend Google Apps Script (Kode.gs) - VERSI DENGAN FITUR LIBUR GURU
+ * Backend Google Apps Script (Kode.gs) - VERSI DENGAN FITUR EMIS
  *
  * FITUR BARU:
- * - Guru dapat mengatur hari libur mengajarnya sendiri (Senin-Sabtu)
- * - Pengaturan libur otomatis diterapkan pada tabel absensi bulanan
+ * - Guru dapat mengimpor data kehadiran dari file Excel EMIS.
  * ===================================================================
  */
 
@@ -18,7 +17,7 @@ const attendanceSheet = ss.getSheetByName("Attendance");
 const settingsSheet = ss.getSheetByName("Settings");
 const holidaysSheet = ss.getSheetByName("Holidays");
 const announcementsSheet = ss.getSheetByName("Announcements");
-const teacherHolidaysSheet = ss.getSheetByName("TeacherHolidays"); // <-- SHEET BARU
+const teacherHolidaysSheet = ss.getSheetByName("TeacherHolidays");
 
 // --- FUNGSI UTAMA & TAMPILAN ---
 
@@ -67,7 +66,6 @@ function userLogin(email, password) {
 
 // --- FUNGSI UNTUK TAMPILAN GURU ---
 
-// GANTI FUNGSI LAMA DENGAN VERSI BARU INI
 function getAppSettingsForUser(email, year, month) {
   const attendanceData = getMonthlyAttendance(email, year, month);
   let lockedMonths = [];
@@ -101,9 +99,8 @@ function getAppSettingsForUser(email, year, month) {
   } catch (e) {}
 
   const announcements = getAnnouncements();
-  const teacherHolidays = getTeacherHolidays(email); // <-- PANGGIL FUNGSI BARU
+  const teacherHolidays = getTeacherHolidays(email);
 
-  // <-- SERTAKAN DATA BARU DI RETURN
   return { 
     attendance: attendanceData, 
     lockedMonths: lockedMonths, 
@@ -130,14 +127,19 @@ function saveMonthlyAttendance(payload) {
     const checkOutDateTime = entry.checkOut ? new Date(`${date}T${entry.checkOut}:00`) : null;
     const reason = entry.reason || null;
     if (existingRecords[date]) {
-      // Jika data dikosongkan (checkIn, checkOut, dan reason null), hapus barisnya
+      // Jika data dikosongkan, hapus barisnya
       if (!checkInDateTime && !checkOutDateTime && !reason) {
           attendanceSheet.deleteRow(existingRecords[date].rowIndex);
       } else {
-          attendanceSheet.getRange(existingRecords[date].rowIndex, 6, 1, 3).setValues([[checkInDateTime, checkOutDateTime, reason]]);
+          const range = attendanceSheet.getRange(existingRecords[date].rowIndex, 6, 1, 3);
+          range.setValues([[checkInDateTime, checkOutDateTime, reason]]);
+          // FIX: Terapkan format HH:mm pada kolom waktu
+          range.offset(0, 0, 1, 2).setNumberFormat("HH:mm");
       }
     } else if (checkInDateTime || checkOutDateTime || reason) {
       attendanceSheet.appendRow([new Date(), email, name, school, new Date(date), checkInDateTime, checkOutDateTime, reason]);
+      // FIX: Terapkan format HH:mm pada baris yang baru ditambahkan
+      attendanceSheet.getRange(attendanceSheet.getLastRow(), 6, 1, 2).setNumberFormat("HH:mm");
     }
   }
   return { status: "success", message: "Absensi bulan ini berhasil diperbarui!" };
@@ -164,7 +166,243 @@ function getMonthlyAttendance(email, year, month) {
   return attendanceData;
 }
 
-// --- FUNGSI BARU UNTUK MENGELOLA HARI LIBUR GURU ---
+// --- FUNGSI BARU UNTUK EKSPOR EXCEL (FIX "daily is not defined") ---
+function exportToExcel(userEmail, selectedMonthYear, startLockId) {
+  let tempSpreadsheetId = null;
+  try {
+    if (!selectedMonthYear || !/^\d{4}-\d{2}$/.test(selectedMonthYear)) {
+      throw new Error("Format Bulan/Tahun tidak valid.");
+    }
+    if (isNaN(parseInt(startLockId))) {
+      throw new Error("LOCK ID harus berupa angka.");
+    }
+
+    const [yearStr, monthStr] = selectedMonthYear.split('-');
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10);
+    let currentLockId = parseInt(startLockId, 10);
+
+    const attendanceData = getMonthlyAttendance(userEmail, year, month);
+    
+    const exportData = [
+      ['LOCK ID', 'TANGGAL', 'HARI', 'JAM MASUK', 'JAM PULANG', 'ALASAN TIDAK HADIR', 'DESKRIPSI']
+    ];
+    
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const TIMEZONE = "GMT";
+    
+    const formatTimeToHHMM = (timeString) => {
+      if (!timeString || typeof timeString !== 'string' || !timeString.includes(':')) {
+        return "";
+      }
+      let parts = timeString.split(':');
+      let hour = parts[0];
+      let minute = parts[1];
+      if (hour.length === 1) {
+        hour = '0' + hour;
+      }
+      return hour + ':' + minute;
+    };
+    
+    for (let day = 1; day <= daysInMonth; day++) {
+      const currentDate = new Date(Date.UTC(year, month - 1, day));
+      
+      const tanggal = Utilities.formatDate(currentDate, TIMEZONE, "yyyy-MM-dd");
+      const hari = currentDate.toLocaleString('id-ID', { weekday: 'long', timeZone: TIMEZONE });
+      const dailyData = attendanceData[tanggal] || { checkIn: "", checkOut: "", reason: "" };
+      const alasan = dailyData.reason || "";
+      
+      const jamMasuk = alasan ? "" : formatTimeToHHMM(dailyData.checkIn);
+      // FIX: Variabel yang salah telah diperbaiki dari "daily" menjadi "dailyData"
+      const jamPulang = alasan ? "" : formatTimeToHHMM(dailyData.checkOut); 
+      
+      exportData.push([
+        currentLockId, tanggal, hari, jamMasuk, jamPulang, alasan, alasan
+      ]);
+      currentLockId++;
+    }
+    
+    const tempSpreadsheet = SpreadsheetApp.create(`temp_export_${userEmail}_${new Date().getTime()}`);
+    tempSpreadsheetId = tempSpreadsheet.getId();
+    const tempSheet = tempSpreadsheet.getSheets()[0];
+    
+    const dataRange = tempSheet.getRange(1, 1, exportData.length, exportData[0].length);
+    dataRange.setValues(exportData);
+    
+    if (exportData.length > 1) {
+      tempSheet.getRange("B2:B" + exportData.length).setNumberFormat('@');
+      tempSheet.getRange("D2:E" + exportData.length).setNumberFormat('@');
+    }
+    
+    dataRange.setHorizontalAlignment('center');
+    tempSheet.setColumnWidths(1, exportData[0].length, 120);
+    
+    SpreadsheetApp.flush(); 
+    
+    const url = `https://docs.google.com/spreadsheets/d/${tempSpreadsheetId}/export?format=xlsx`;
+    const token = ScriptApp.getOAuthToken();
+    const response = UrlFetchApp.fetch(url, {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    
+    const blob = response.getBlob();
+    
+    const bulanNama = new Date(year, month - 1, 1).toLocaleString('id-ID', { month: 'long' });
+    const userRange = usersSheet.createTextFinder(userEmail).findNext();
+    let userName = userEmail;
+    if (userRange) {
+      userName = usersSheet.getRange(userRange.getRow(), 3).getValue();
+    }
+    const fileName = `EMIS_${userName.replace(/\s/g, '_')}_${bulanNama}_${year}.xlsx`;
+    
+    blob.setName(fileName);
+    const fileData = Utilities.base64Encode(blob.getBytes());
+
+    return { status: "success", fileData: fileData, fileName: fileName };
+
+  } catch (e) {
+    Logger.log("Error di exportToExcel: " + e.toString() + " | Stack: " + e.stack);
+    return { status: "error", message: `Gagal membuat file Excel: ${e.message}` };
+  } finally {
+    if (tempSpreadsheetId) {
+      try {
+        DriveApp.getFileById(tempSpreadsheetId).setTrashed(true);
+      } catch(err) {
+        Logger.log("Gagal menghapus file sementara: " + err.toString());
+      }
+    }
+  }
+}
+
+// --- FUNGSI BARU UNTUK EMIS IMPORT (VERSI PERBAIKAN) ---
+// Helper function untuk mem-parsing tanggal dari berbagai format Excel
+function parseDateFromExcel(cellValue) {
+  // Jika sudah berupa objek Date yang valid
+  if (cellValue instanceof Date && !isNaN(cellValue)) {
+    return Utilities.formatDate(cellValue, "GMT", "yyyy-MM-dd");
+  }
+  // Jika berupa angka serial (misal: 45224)
+  if (typeof cellValue === 'number' && cellValue > 0) {
+    // Konversi angka serial Excel ke objek Date JavaScript
+    const jsDate = new Date((cellValue - 25569) * 86400 * 1000);
+    return Utilities.formatDate(jsDate, "GMT", "yyyy-MM-dd");
+  }
+  // Jika berupa string dengan format YYYY-MM-DD
+  if (typeof cellValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(cellValue.trim())) {
+    return cellValue.trim();
+  }
+  // Jika tidak ada format yang cocok
+  return null;
+}
+
+// Helper function untuk mem-parsing waktu dari berbagai format Excel
+function parseTimeFromExcel(cellValue) {
+  // Jika sudah berupa objek Date yang valid
+  if (cellValue instanceof Date && !isNaN(cellValue)) {
+    return Utilities.formatDate(cellValue, "GMT", "HH:mm");
+  }
+  // Jika berupa angka desimal (misal: 0.3125 untuk jam 07:30)
+  if (typeof cellValue === 'number' && cellValue > 0 && cellValue < 1) {
+    // Buat objek date dummy dan set waktunya berdasarkan fraksi
+    const dummyDate = new Date(1970, 0, 1, 0, 0, 0);
+    dummyDate.setSeconds(cellValue * 86400); // 86400 detik dalam sehari
+    return Utilities.formatDate(dummyDate, "GMT", "HH:mm");
+  }
+  // Jika berupa string HH:mm
+  if (typeof cellValue === 'string' && /^\d{2}:\d{2}/.test(cellValue.trim())) {
+    return cellValue.trim().substring(0, 5);
+  }
+  // Jika tidak ada format yang cocok
+  return "";
+}
+
+
+function importFromEmis(userEmail, fileData) {
+  let tempFileId = null;
+  try {
+    const decodedData = Utilities.base64Decode(fileData.data, Utilities.Charset.UTF_8);
+    const blob = Utilities.newBlob(decodedData, fileData.mimeType, fileData.fileName);
+    const resource = {
+      title: `temp_import_${userEmail}_${new Date().getTime()}`,
+      parents: [{ id: 'root' }]
+    };
+    const tempSheetFile = Drive.Files.insert(resource, blob, { convert: true });
+    tempFileId = tempSheetFile.id;
+    const spreadsheet = SpreadsheetApp.openById(tempFileId);
+    const sheet = spreadsheet.getSheets()[0];
+    const data = sheet.getDataRange().getValues();
+
+    if (data.length < 2) {
+      throw new Error("File Excel kosong atau tidak memiliki data.");
+    }
+
+    const headers = data[0].map(h => h.toString().trim().toUpperCase());
+    const dateIndex = headers.indexOf("TANGGAL");
+    const checkInIndex = headers.indexOf("JAM MASUK");
+    const checkOutIndex = headers.indexOf("JAM PULANG");
+    const reasonIndex = headers.indexOf("ALASAN TIDAK HADIR");
+
+    if (dateIndex === -1 || checkInIndex === -1 || checkOutIndex === -1 || reasonIndex === -1) {
+      throw new Error("Header kolom tidak sesuai. Pastikan ada: TANGGAL, JAM MASUK, JAM PULANG, ALASAN TIDAK HADIR.");
+    }
+
+    const users = usersSheet.getDataRange().getValues();
+    let userFound = null;
+    for (let i = 1; i < users.length; i++) {
+      if(users[i][0].toLowerCase() === userEmail.toLowerCase()) {
+        userFound = { name: users[i][2], school: users[i][3] };
+        break;
+      }
+    }
+    if (!userFound) throw new Error("Data pengguna tidak ditemukan.");
+    
+    const attendancePayload = {
+      email: userEmail, name: userFound.name, school: userFound.school, attendance: {}
+    };
+
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      const dateStr = parseDateFromExcel(row[dateIndex]);
+      
+      // Jika tanggal tidak valid, lewati baris ini
+      if (!dateStr) {
+        Logger.log(`Baris ${i+1} dilewati karena format tanggal tidak valid: ${row[dateIndex]}`);
+        continue;
+      }
+
+      const checkIn = parseTimeFromExcel(row[checkInIndex]);
+      const checkOut = parseTimeFromExcel(row[checkOutIndex]);
+      const reasonValue = row[reasonIndex] ? row[reasonIndex].toString().trim() : "";
+      
+      attendancePayload.attendance[dateStr] = {
+        checkIn: reasonValue ? "" : (checkIn || ""),
+        checkOut: reasonValue ? "" : (checkOut || ""),
+        reason: reasonValue || ""
+      };
+    }
+    
+    if (Object.keys(attendancePayload.attendance).length === 0) {
+      throw new Error("Tidak ada baris data yang valid ditemukan di dalam file. Periksa kembali format tanggal (YYYY-MM-DD) dan waktu (HH:mm) Anda.");
+    }
+    
+    const result = saveMonthlyAttendance(attendancePayload);
+    if(result.status !== 'success') {
+      throw new Error(result.message);
+    }
+
+    return { status: "success", message: `Berhasil mengimpor ${Object.keys(attendancePayload.attendance).length} baris data kehadiran.` };
+
+  } catch (e) {
+    Logger.log("Error di importFromEmis: " + e.toString() + " | Stack: " + e.stack);
+    return { status: "error", message: `Gagal mengimpor: ${e.message}` };
+  } finally {
+    if (tempFileId) {
+      try { Drive.Files.remove(tempFileId); } catch(e) {}
+    }
+  }
+}
+
+// --- FUNGSI MENGELOLA HARI LIBUR GURU ---
 
 function getTeacherHolidays(email) {
   if (!email) return Array(6).fill(false);
@@ -172,14 +410,11 @@ function getTeacherHolidays(email) {
     const data = teacherHolidaysSheet.getDataRange().getValues();
     for(let i = 0; i < data.length; i++) {
       if(data[i][0].toLowerCase() === email.toLowerCase()) {
-        // Kolom B sampai G (index 1 sampai 6)
         return data[i].slice(1, 7); 
       }
     }
-    // Jika tidak ditemukan, kembalikan default (semua false)
     return Array(6).fill(false);
   } catch (e) {
-    // Jika ada error (misal sheet tidak ada), kembalikan default
     return Array(6).fill(false);
   }
 }
@@ -199,10 +434,8 @@ function saveTeacherHolidays(email, settings) {
     }
     const valuesToSave = [email, ...settings];
     if (rowIndex > 0) {
-      // Update data yang ada
       teacherHolidaysSheet.getRange(rowIndex, 1, 1, 7).setValues([valuesToSave]);
     } else {
-      // Tambah data baru
       teacherHolidaysSheet.appendRow(valuesToSave);
     }
     return { status: "success", message: "Pengaturan hari libur berhasil disimpan." };
@@ -530,5 +763,22 @@ function getAttendanceSummary(userEmail, year, month) {
     };
   } catch(e) {
     return { success: false, error: e.message };
+  }
+}
+
+/**
+ * FUNGSI UTILITAS: Jalankan fungsi ini SATU KALI dari editor skrip
+ * untuk memperbaiki format waktu pada semua data absensi yang sudah ada.
+ */
+function formatExistingAttendanceTimes() {
+  const sheet = SpreadsheetApp.openById("1EIQY1DeGcwhEaYojbGMah-S5HbtsrON5YRy37bl_vLg").getSheetByName("Attendance");
+  const lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    // Kolom F (JamMasuk) dan G (JamPulang)
+    const timeRange = sheet.getRange("F2:G" + lastRow);
+    timeRange.setNumberFormat("HH:mm");
+    Logger.log("Pemformatan selesai untuk rentang " + timeRange.getA1Notation());
+  } else {
+    Logger.log("Tidak ada data untuk diformat.");
   }
 }
