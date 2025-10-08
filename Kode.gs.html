@@ -277,6 +277,7 @@ function prepareSchoolRekapForPrint(userEmail, selectedMonthYear, selectedSchool
 /**
  * FUNGSI INTI PENGHASIL PDF (DIGUNAKAN BERSAMA)
  * Membuat laporan di sheet sementara, menghasilkan PDF, lalu menghapus sheet.
+ * --- VERSI DENGAN FORMAT FINAL ---
  */
 function generateRekapPDF(selectedMonthYear, selectedSchool, singleUserEmail) {
   let tempSheet;
@@ -335,16 +336,26 @@ function generateRekapPDF(selectedMonthYear, selectedSchool, singleUserEmail) {
     const tanggalAwalObj = new Date(yyyy, mm - 1, 1);
     const tanggalAwalFormatted = Utilities.formatDate(tanggalAwalObj, TIMEZONE, "yyyy-MM-dd");
     const tanggalAkhirFormatted = Utilities.formatDate(new Date(yyyy, mm, 0), TIMEZONE, "yyyy-MM-dd");
+    
+    // Header Utama
     tempSheet.getRange("A1:AE1").merge();
-    tempSheet.getRange("A1").setValue("Lap. Detail Absensi").setHorizontalAlignment("center").setVerticalAlignment("middle").setFontWeight("bold").setFontSize(14);
-    tempSheet.getRange("A2:AE2").setVerticalAlignment("middle");
-    tempSheet.getRange("A2").setValue(`Waktu Absen ${tanggalAwalFormatted} ~ ${tanggalAkhirFormatted}`);
-    tempSheet.getRange("L2").setValue(`Tabulasi ${tanggalAkhirFormatted}`);
+    tempSheet.getRange("A1").setValue("Lap. Detail Absensi").setHorizontalAlignment("center").setVerticalAlignment("top").setFontWeight("bold").setFontSize(14);
+    tempSheet.setRowHeight(1, 60); // Mengatur tinggi baris header utama
+    
+    // Sub-Header
+    tempSheet.getRange("A2:AE2").setVerticalAlignment("middle").setFontSize(11);
+    tempSheet.getRange("A2").setValue(`Waktu Absensi ${tanggalAwalFormatted} ~ ${tanggalAkhirFormatted}`);
+    tempSheet.getRange("L2").setValue(`Tabulansi ${tanggalAkhirFormatted}`);
+    
+    // Header Tanggal
     const nomorTanggalHeader = Array.from({ length: 31 }, (_, i) => (i < jumlahHari ? i + 1 : ""));
     tempSheet.getRange(3, 1, 1, 31).setValues([nomorTanggalHeader]).setHorizontalAlignment("center").setVerticalAlignment("middle").setBorder(true, true, true, true, true, true, '#000000', SpreadsheetApp.BorderStyle.SOLID);
+    tempSheet.setRowHeight(3, 38); // Mengatur tinggi baris tanggal
     
     let barisSaatIni = 4;
     daftarGuru.forEach((guru, index) => {
+      // Baris Info Guru
+      tempSheet.setRowHeight(barisSaatIni, 26); // Mengatur tinggi baris ID
       const formatSekolah = (guru.school || "").toUpperCase().replace(/ /g, "~");
       tempSheet.getRange(barisSaatIni, 1).setValue("ID:");
       tempSheet.getRange(barisSaatIni, 3).setValue(index + 1);
@@ -364,9 +375,14 @@ function generateRekapPDF(selectedMonthYear, selectedSchool, singleUserEmail) {
         arrayJamMasuk.push(jamMasuk);
         arrayJamPulang.push(jamPulang);
       }
+      
+      // Baris Data Absensi
+      tempSheet.setRowHeight(barisSaatIni + 1, 18); // Mengatur tinggi baris jam masuk
+      tempSheet.setRowHeight(barisSaatIni + 2, 18); // Mengatur tinggi baris jam pulang
       tempSheet.getRange(barisSaatIni + 1, 1, 1, 31).setValues([arrayJamMasuk]);
       tempSheet.getRange(barisSaatIni + 2, 1, 1, 31).setValues([arrayJamPulang]);
       
+      // Pengaturan Format & Border
       const blockRange = tempSheet.getRange(barisSaatIni, 1, 3, 31);
       blockRange.setVerticalAlignment("middle").setHorizontalAlignment("center");
       tempSheet.getRange(barisSaatIni, 1).setHorizontalAlignment("left");
