@@ -251,10 +251,12 @@ function getSchoolList(adminEmail) {
   return [...new Set(usersData.map(row => row[3]))].filter(Boolean);
 }
 
+// GANTI FUNGSI LAMA DENGAN VERSI BARU INI
 function formatTimeToHHMM_or_Empty(dateObj) {
   const TIMEZONE = "GMT+8";
   if (dateObj instanceof Date && !isNaN(dateObj)) {
-    return Utilities.formatDate(dateObj, TIMEZONE, "HH:mm");
+    // Menambahkan "'" di awal untuk memaksa format teks dan mempertahankan awalan nol (0)
+    return "'" + Utilities.formatDate(dateObj, TIMEZONE, "HH:mm");
   }
   return "";
 }
@@ -275,9 +277,8 @@ function prepareSchoolRekapForPrint(userEmail, selectedMonthYear, selectedSchool
 }
 
 /**
- * FUNGSI INTI PENGHASIL PDF (DIGUNAKAN BERSAMA)
- * Membuat laporan di sheet sementara, menghasilkan PDF, lalu menghapus sheet.
- * --- VERSI DENGAN FORMAT FINAL ---
+ * FUNGSI INTI PENGHASIL PDF (VERSI FINAL - FIT TO WIDTH)
+ * Tabel akan selalu pas lebarnya dalam satu halaman dan akan terbagi ke bawah jika data banyak.
  */
 function generateRekapPDF(selectedMonthYear, selectedSchool, singleUserEmail) {
   let tempSheet;
@@ -330,32 +331,28 @@ function generateRekapPDF(selectedMonthYear, selectedSchool, singleUserEmail) {
     });
     
     const jumlahHari = new Date(yyyy, mm, 0).getDate();
-    tempSheet.setColumnWidths(1, 31, 38);
-    if (jumlahHari < 31) tempSheet.setColumnWidths(jumlahHari + 1, 31 - jumlahHari, 26);
+    tempSheet.setColumnWidths(1, 31, 44);
+    if (jumlahHari < 31) tempSheet.setColumnWidths(jumlahHari + 1, 31 - jumlahHari, 24);
     
     const tanggalAwalObj = new Date(yyyy, mm - 1, 1);
     const tanggalAwalFormatted = Utilities.formatDate(tanggalAwalObj, TIMEZONE, "yyyy-MM-dd");
     const tanggalAkhirFormatted = Utilities.formatDate(new Date(yyyy, mm, 0), TIMEZONE, "yyyy-MM-dd");
     
-    // Header Utama
     tempSheet.getRange("A1:AE1").merge();
     tempSheet.getRange("A1").setValue("Lap. Detail Absensi").setHorizontalAlignment("center").setVerticalAlignment("top").setFontWeight("bold").setFontSize(14);
-    tempSheet.setRowHeight(1, 60); // Mengatur tinggi baris header utama
+    tempSheet.setRowHeight(1, 60);
     
-    // Sub-Header
     tempSheet.getRange("A2:AE2").setVerticalAlignment("middle").setFontSize(11);
     tempSheet.getRange("A2").setValue(`Waktu Absensi ${tanggalAwalFormatted} ~ ${tanggalAkhirFormatted}`);
     tempSheet.getRange("L2").setValue(`Tabulansi ${tanggalAkhirFormatted}`);
     
-    // Header Tanggal
     const nomorTanggalHeader = Array.from({ length: 31 }, (_, i) => (i < jumlahHari ? i + 1 : ""));
     tempSheet.getRange(3, 1, 1, 31).setValues([nomorTanggalHeader]).setHorizontalAlignment("center").setVerticalAlignment("middle").setBorder(true, true, true, true, true, true, '#000000', SpreadsheetApp.BorderStyle.SOLID);
-    tempSheet.setRowHeight(3, 38); // Mengatur tinggi baris tanggal
+    tempSheet.setRowHeight(3, 38);
     
     let barisSaatIni = 4;
     daftarGuru.forEach((guru, index) => {
-      // Baris Info Guru
-      tempSheet.setRowHeight(barisSaatIni, 26); // Mengatur tinggi baris ID
+      tempSheet.setRowHeight(barisSaatIni, 26);
       const formatSekolah = (guru.school || "").toUpperCase().replace(/ /g, "~");
       tempSheet.getRange(barisSaatIni, 1).setValue("ID:");
       tempSheet.getRange(barisSaatIni, 3).setValue(index + 1);
@@ -376,13 +373,11 @@ function generateRekapPDF(selectedMonthYear, selectedSchool, singleUserEmail) {
         arrayJamPulang.push(jamPulang);
       }
       
-      // Baris Data Absensi
-      tempSheet.setRowHeight(barisSaatIni + 1, 18); // Mengatur tinggi baris jam masuk
-      tempSheet.setRowHeight(barisSaatIni + 2, 18); // Mengatur tinggi baris jam pulang
+      tempSheet.setRowHeight(barisSaatIni + 1, 18);
+      tempSheet.setRowHeight(barisSaatIni + 2, 18);
       tempSheet.getRange(barisSaatIni + 1, 1, 1, 31).setValues([arrayJamMasuk]);
       tempSheet.getRange(barisSaatIni + 2, 1, 1, 31).setValues([arrayJamPulang]);
       
-      // Pengaturan Format & Border
       const blockRange = tempSheet.getRange(barisSaatIni, 1, 3, 31);
       blockRange.setVerticalAlignment("middle").setHorizontalAlignment("center");
       tempSheet.getRange(barisSaatIni, 1).setHorizontalAlignment("left");
@@ -404,7 +399,11 @@ function generateRekapPDF(selectedMonthYear, selectedSchool, singleUserEmail) {
     const sheetId = tempSheet.getSheetId();
     const bulanNama = new Date(yyyy, mm - 1, 1).toLocaleString('id-ID', { month: 'long' });
     const fileName = `Absensi ${fileNameSchoolPart} - ${bulanNama.toUpperCase()} ${yyyy}.pdf`;
-    const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=pdf&gid=${sheetId}&size=A4&scale=4&top_margin=0.393701&bottom_margin=0.393701&left_margin=0.393701&right_margin=0.393701&gridlines=false&printnotes=false&horizontal_alignment=CENTER&vertical_alignment=TOP`;
+
+    // --- PERUBAHAN DI SINI ---
+    // Mengganti 'scale=1' dengan 'fitw=true' untuk "Fit to Width".
+    const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=pdf&gid=${sheetId}&size=A4&portrait=false&fitw=true&top_margin=0.393701&bottom_margin=0.393701&left_margin=0.393701&right_margin=0.393701&gridlines=false&printnotes=false&horizontal_alignment=CENTER&vertical_alignment=TOP`;
+    
     const token = ScriptApp.getOAuthToken();
     const response = UrlFetchApp.fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
     const blob = response.getBlob().setName(fileName);
@@ -419,5 +418,72 @@ function generateRekapPDF(selectedMonthYear, selectedSchool, singleUserEmail) {
     if (tempSheet) {
       ss.deleteSheet(tempSheet);
     }
+  }
+}
+
+/**
+ * ===================================================================
+ * FUNGSI RINGKASAN KEHADIRAN GURU (VERSI DENGAN TAMBAHAN CEKLOK)
+ * ===================================================================
+ */
+function getAttendanceSummary(userEmail, year, month) {
+  try {
+    const holidaysData = holidaysSheet.getDataRange().getValues().slice(1);
+    const holidays = {};
+    holidaysData.forEach(row => {
+      if (row[0] instanceof Date && row[1]) {
+        holidays[Utilities.formatDate(row[0], "GMT", "yyyy-MM-dd")] = row[1];
+      }
+    });
+
+    const attendanceData = getMonthlyAttendance(userEmail, year, month);
+    const daysInMonth = new Date(year, month, 0).getDate();
+
+    let hariKerja = 0;
+    let kehadiran = 0;
+    let alasan = 0;
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateObj = new Date(year, month - 1, day);
+      const dateStr = Utilities.formatDate(dateObj, "GMT", "yyyy-MM-dd");
+      
+      const isSunday = dateObj.getDay() === 0;
+      const isHoliday = !!holidays[dateStr];
+
+      if (!isSunday && !isHoliday) {
+        hariKerja++;
+        
+        const entry = attendanceData[dateStr];
+        if (entry) {
+          const hasCheckIn = entry.checkIn && entry.checkIn.trim() !== "";
+          const hasCheckOut = entry.checkOut && entry.checkOut.trim() !== "";
+          const hasReason = entry.reason && entry.reason.trim() !== "";
+
+          if (hasReason) {
+            alasan++;
+          } else if (hasCheckIn && hasCheckOut) {
+            kehadiran++;
+          }
+        }
+      }
+    }
+
+    const alpa = hariKerja - (kehadiran + alasan);
+    const totalCeklok = kehadiran + alasan; // Ini adalah nilai untuk "Ceklok"
+    const persentase = (hariKerja > 0) ? Math.round((totalCeklok / hariKerja) * 100) : 0;
+
+    return {
+      success: true,
+      summary: {
+        hariKerja: hariKerja,
+        kehadiran: kehadiran,
+        alpa: alpa,
+        alasan: alasan,
+        persentase: persentase,
+        ceklok: totalCeklok // <-- DATA BARU YANG DIKIRIM
+      }
+    };
+  } catch(e) {
+    return { success: false, error: e.message };
   }
 }
