@@ -523,48 +523,55 @@
       
       function handleSave() {
           const button = document.getElementById('save-button');
+          // Clear previous validation errors
           document.querySelectorAll('#attendance-table-container tr.invalid-row').forEach(row => {
               row.classList.remove('invalid-row');
           });
+
           const payload = { email: currentUser.email, name: currentUser.name, school: currentUser.school, attendance: {} };
           const rows = document.querySelectorAll('#attendance-table-container tbody tr');
           let validationError = false;
           let firstErrorRow = null;
+
           rows.forEach(row => {
               const date = row.id.replace('row-', '');
-              if (!date || !row.querySelector('input[type="time"]')) return;
+              if (!date || !row.querySelector('input[type="time"]')) return; // Skip non-data rows
+
               const checkInInput = row.querySelector('input[type="time"]');
               const checkOutInput = row.querySelectorAll('input[type="time"]')[1];
               const reasonSelect = row.querySelector('select');
-              
+
               // --- PERBAIKAN DIMULAI DI SINI ---
               let checkIn = checkInInput ? checkInInput.value : "";
               let checkOut = checkOutInput ? checkOutInput.value : "";
+
+              // Function to ensure time is in HH:mm format
+              const formatToHHMM = (time) => {
+                if (time && time.includes(':')) {
+                  let parts = time.split(':');
+                  if (parts[0].length === 1) { parts[0] = '0' + parts[0]; }
+                  if (parts[1] && parts[1].length === 1) { parts[1] = '0' + parts[1]; }
+                  return parts.join(':');
+                }
+                return time;
+              };
               
-              // Memastikan format jam selalu HH:mm sebelum dikirim ke server
-              if (checkIn && checkIn.includes(':')) {
-                let parts = checkIn.split(':');
-                if (parts[0].length === 1) { parts[0] = '0' + parts[0]; }
-                if (parts[1] && parts[1].length === 1) { parts[1] = '0' + parts[1]; }
-                checkIn = parts.join(':');
-              }
-              if (checkOut && checkOut.includes(':')) {
-                let parts = checkOut.split(':');
-                if (parts[0].length === 1) { parts[0] = '0' + parts[0]; }
-                if (parts[1] && parts[1].length === 1) { parts[1] = '0' + parts[1]; }
-                checkOut = parts.join(':');
-              }
+              checkIn = formatToHHMM(checkIn);
+              checkOut = formatToHHMM(checkOut);
               // --- PERBAIKAN SELESAI ---
 
               const reason = reasonSelect ? reasonSelect.value : "";
               const hasCheckIn = checkIn && checkIn.trim() !== "";
               const hasCheckOut = checkOut && checkOut.trim() !== "";
               const hasReason = reason && reason.trim() !== "";
+
+              // Validation: if one time is filled, the other must be too
               if (!hasReason && ((hasCheckIn && !hasCheckOut) || (!hasCheckIn && hasCheckOut))) {
                   validationError = true;
                   row.classList.add('invalid-row');
                   if (!firstErrorRow) firstErrorRow = row;
               }
+
               payload.attendance[date] = { 
                   checkIn: hasReason ? "" : (checkIn || ""), 
                   checkOut: hasReason ? "" : (checkOut || ""), 
@@ -579,14 +586,17 @@
               }
               return;
           }
+
           button.disabled = true;
           button.textContent = "Menyimpan...";
           document.getElementById('save-message').innerText = "";
+
           google.script.run
               .withSuccessHandler(r => {
                   displayMessage('save-message', r.message, true);
+                  button.disabled = false; // Re-enable button
                   button.textContent = "Simpan Semua Perubahan";
-                  loadMonthData(currentDate); 
+                  loadMonthData(currentDate); // Reload data to show fresh state
                   loadAndRenderSummary();
               })
               .withFailureHandler(e => {
