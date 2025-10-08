@@ -71,20 +71,21 @@
               <label for="guru-rekap-month">Pilih Bulan dan Tahun</label>
               <input type="month" id="guru-rekap-month">
           </div>
-          
+
           <button onclick="handleGuruDownloadRekap()" id="guru-download-rekap-button" class="action-button">
               Buat & Unduh Rekap Saya
           </button>
-          <p id="guru-rekap-message" class="message" style="margin-top: 5px; margin-bottom: 10px;"></p>
-          
-          <button onclick="handleGuruDownloadAllRekap()" id="guru-download-all-rekap-button" class="action-button secondary" style="margin-top: -5px;">
+          <button onclick="handleGuruDownloadAllRekap()" id="guru-download-all-rekap-button" class="action-button secondary">
               Unduh Rekap Semua Guru (Satu Sekolah)
           </button>
+
+          <p id="guru-rekap-message" class="message" style="margin-top: 5px; margin-bottom: 0;"></p>
           <p id="guru-rekap-all-message" class="message" style="margin-top: 5px;"></p>
 
-          <hr style="margin: 25px 0; border: none; border-top: 1px solid #E5E7EB;">
+          <hr style="margin: 25px 0;">
 
-          <div class="dashboard-actions" style="margin-top: 0;">
+          <h3>CEKLOK</h3>
+          <div class="dashboard-actions" style="margin-top: 10px;">
             <button id="ceklok-button" class="action-button" onclick="showCeklokPage()">
               <span>Isi Ceklok Kehadiran</span>
             </button>
@@ -735,18 +736,34 @@
               const fileData = {
                   fileName: file.name,
                   mimeType: file.type,
-                  data: data[1] // The base64 part
+                  data: data[1]
               };
 
               google.script.run
                   .withSuccessHandler(response => {
-                      displayMessage('emis-import-message', response.message, response.status === 'success');
                       button.disabled = false;
                       button.textContent = 'Proses Import';
-                      if(response.status === 'success') {
-                          fileInput.value = ""; // Reset file input
-                          setTimeout(() => showCeklokPage(), 2000); // Redirect to attendance page
+                      
+                      // --- PERBAIKAN: Logika baru untuk pesan sukses dan navigasi otomatis ---
+                      if (response.status === 'success') {
+                          // 1. Buat pesan sukses yang dinamis
+                          const successMessage = `Import bulan ${response.monthName} ${response.year} berhasil, data yang terinput sebanyak ${response.count} data.`;
+                          displayMessage('emis-import-message', successMessage, true);
+                          
+                          fileInput.value = ""; // Reset input file
+
+                          // 2. Atur tanggal global ke bulan yang diimpor
+                          currentDate = new Date(response.year, response.month - 1, 1);
+                          
+                          // 3. Pindah ke halaman ceklok setelah 2.5 detik
+                          setTimeout(() => {
+                              showCeklokPage();
+                          }, 2500); 
+                      } else {
+                          // Jika gagal, tampilkan pesan error seperti biasa
+                          displayMessage('emis-import-message', response.message, false);
                       }
+                      // --- PERBAIKAN SELESAI ---
                   })
                   .withFailureHandler(error => {
                       displayMessage('emis-import-message', 'Error: ' + error.message);
