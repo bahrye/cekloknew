@@ -31,6 +31,38 @@
             <h3>Pengumuman</h3>
             <p id="announcement-text">Tidak ada pengumuman saat ini.</p>
           </div>
+          <div id="summary-section">
+              <div class="summary-title">
+                  <h3>Ringkasan Bulan Ini</h3>
+                  <span id="summary-month-display"></span>
+              </div>
+              <div class="summary-grid">
+                  <div class="summary-item">
+                      <span class="summary-value" id="summary-hari-kerja">-</span>
+                      <span class="summary-label">Hari Kerja</span>
+                  </div>
+                  <div class="summary-item">
+                      <span class="summary-value" id="summary-kehadiran">-</span>
+                      <span class="summary-label">Hadir</span>
+                  </div>
+                  <div class="summary-item">
+                      <span class="summary-value" id="summary-alpa">-</span>
+                      <span class="summary-label">Alpa</span>
+                  </div>
+                  <div class="summary-item">
+                      <span class="summary-value" id="summary-alasan">-</span>
+                      <span class="summary-label">Hari Libur Sekolah</span>
+                  </div>
+                  <div class="summary-item">
+                      <span class="summary-value" id="summary-persentase">-</span>
+                      <span class="summary-label">Persentase</span>
+                  </div>
+                  <div class="summary-item">
+                      <span class="summary-value" id="summary-ceklok">-</span>
+                      <span class="summary-label">Ceklok</span>
+                  </div>
+              </div>
+          </div>
           <hr style="margin: 25px 0;">
           <h3>Unduh Rekap Pribadi</h3>
           <div class="input-group">
@@ -170,6 +202,7 @@
       // ===================================================================
       // INISIALISASI & OTENTIKASI
       // ===================================================================
+      // GANTI BLOK LAMA DENGAN VERSI BARU INI
       document.addEventListener('DOMContentLoaded', () => {
         const userSession = sessionStorage.getItem('ceklokUser');
         if (userSession) {
@@ -180,6 +213,25 @@
             showGuruDashboard(currentUser);
           }
         }
+
+        // --- PENAMBAHAN FUNGSI ENTER UNTUK LOGIN ---
+        const emailInput = document.getElementById('email');
+        const passwordInput = document.getElementById('password');
+
+        // Fungsi yang akan dijalankan ketika tombol ditekan
+        const loginOnEnter = (event) => {
+          // Periksa jika tombol yang ditekan adalah 'Enter'
+          if (event.key === 'Enter') {
+            // Mencegah aksi default browser
+            event.preventDefault();
+            // Panggil fungsi login
+            handleLogin();
+          }
+        };
+
+        // Terapkan fungsi di atas ke kedua input field
+        emailInput.addEventListener('keyup', loginOnEnter);
+        passwordInput.addEventListener('keyup', loginOnEnter);
       });
       
       function handleLogin() {
@@ -237,16 +289,22 @@
       // ===================================================================
       // LOGIKA UNTUK GURU
       // ===================================================================
+      // GANTI FUNGSI LAMA DENGAN YANG INI
       function showGuruDashboard(userData) {
-        if (userData) currentUser = userData;
-        document.getElementById("login-container").style.display = "none";
-        document.getElementById("ceklok-container").style.display = "none";
-        document.getElementById("admin-container").style.display = "none";
-        document.getElementById("guru-dashboard-container").style.display = "block";
-        document.getElementById("guru-welcome-message").innerHTML = `Halo, <strong>${currentUser.name}</strong><br><small>${currentUser.school}</small>`;
-        google.script.run.withSuccessHandler(response => {
-            renderAnnouncements(response.announcements);
-        }).getAppSettingsForUser(currentUser.email, currentDate.getFullYear(), currentDate.getMonth() + 1);
+          if (userData) currentUser = userData;
+          document.getElementById("login-container").style.display = "none";
+          document.getElementById("ceklok-container").style.display = "none";
+          document.getElementById("admin-container").style.display = "none";
+          document.getElementById("guru-dashboard-container").style.display = "block";
+          document.getElementById("guru-welcome-message").innerHTML = `Halo, <strong>${currentUser.name}</strong><br><small>${currentUser.school}</small>`;
+          
+          // Memuat pengumuman
+          google.script.run.withSuccessHandler(response => {
+              renderAnnouncements(response.announcements);
+          }).getAppSettingsForUser(currentUser.email, currentDate.getFullYear(), currentDate.getMonth() + 1);
+
+          // Memuat ringkasan kehadiran untuk bulan ini
+          loadAndRenderSummary();
       }
       
       function showCeklokPage() {
@@ -357,34 +415,113 @@
         if (reasonSelect) reasonSelect.value = '';
       }
       
+      // GANTI FUNGSI LAMA DENGAN VERSI BARU YANG SUDAH DIPERBAIKI INI
       function handleSave() {
-        const button = document.getElementById('save-button');
-        button.disabled = true;
-        button.textContent = "Menyimpan...";
-        document.getElementById('save-message').innerText = "";
-        const payload = { email: currentUser.email, name: currentUser.name, school: currentUser.school, attendance: {} };
-        const rows = document.querySelectorAll('#attendance-table-container tbody tr');
-        rows.forEach(row => {
-          const date = row.id.replace('row-', '');
-          const checkIn = row.querySelector('input[type="time"]')?.value;
-          const checkOut = row.querySelector('input[type="time"]')?.value;
-          const reason = row.querySelector('select')?.value;
-          if (checkIn || checkOut || reason) {
-            payload.attendance[date] = { checkIn: checkIn || "", checkOut: checkOut || "", reason: reason || "" };
+          const button = document.getElementById('save-button');
+          
+          // Hapus highlight error dari simpan sebelumnya
+          document.querySelectorAll('#attendance-table-container tr.invalid-row').forEach(row => {
+              row.classList.remove('invalid-row');
+          });
+
+          const payload = { email: currentUser.email, name: currentUser.name, school: currentUser.school, attendance: {} };
+          const rows = document.querySelectorAll('#attendance-table-container tbody tr');
+          let validationError = false;
+          let firstErrorRow = null;
+
+          rows.forEach(row => {
+              const date = row.id.replace('row-', '');
+              // Lewati baris yang bukan baris data (seperti baris libur)
+              if (!date || !row.querySelector('input[type="time"]')) return;
+
+              const checkInInput = row.querySelector('input[type="time"]');
+              const checkOutInput = row.querySelectorAll('input[type="time"]')[1];
+              const reasonSelect = row.querySelector('select');
+
+              const checkIn = checkInInput ? checkInInput.value : "";
+              const checkOut = checkOutInput ? checkOutInput.value : "";
+              const reason = reasonSelect ? reasonSelect.value : "";
+              
+              const hasCheckIn = checkIn && checkIn.trim() !== "";
+              const hasCheckOut = checkOut && checkOut.trim() !== "";
+              const hasReason = reason && reason.trim() !== "";
+
+              // Validasi: Jika salah satu jam diisi (dan tidak ada alasan), pasangannya wajib diisi
+              if (!hasReason && ((hasCheckIn && !hasCheckOut) || (!hasCheckIn && hasCheckOut))) {
+                  validationError = true;
+                  row.classList.add('invalid-row');
+                  if (!firstErrorRow) firstErrorRow = row; // Simpan baris error pertama
+              }
+
+              // --- INI BAGIAN PERBAIKANNYA ---
+              // Selalu tambahkan data baris ke payload, bahkan jika kosong.
+              // Ini memastikan bahwa server akan menghapus data jika pengguna mengosongkannya di form.
+              payload.attendance[date] = { 
+                  checkIn: hasReason ? "" : (checkIn || ""), 
+                  checkOut: hasReason ? "" : (checkOut || ""), 
+                  reason: reason || "" 
+              };
+          });
+
+          if (validationError) {
+              displayMessage('save-message', "Gagal: Mohon lengkapi pasangan Jam Masuk & Pulang pada baris yang ditandai merah.");
+              if (firstErrorRow) {
+                  firstErrorRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }
+              return; // Hentikan proses simpan
           }
-        });
-        google.script.run
-          .withSuccessHandler(r => {
-            displayMessage('save-message', r.message, true);
-            button.textContent = "Simpan Semua Perubahan";
-            loadMonthData(currentDate); 
-          })
-          .withFailureHandler(e => {
-            displayMessage('save-message', "Error: " + e.message);
-            button.disabled = false;
-            button.textContent = "Simpan Semua Perubahan";
-          })
-          .saveMonthlyAttendance(payload);
+
+          button.disabled = true;
+          button.textContent = "Menyimpan...";
+          document.getElementById('save-message').innerText = "";
+          
+          google.script.run
+              .withSuccessHandler(r => {
+                  displayMessage('save-message', r.message, true);
+                  button.textContent = "Simpan Semua Perubahan";
+                  loadMonthData(currentDate); 
+                  loadAndRenderSummary(); // Muat ulang summary setelah berhasil menyimpan
+              })
+              .withFailureHandler(e => {
+                  displayMessage('save-message', "Error: " + e.message);
+                  button.disabled = false;
+                  button.textContent = "Simpan Semua Perubahan";
+              })
+              .saveMonthlyAttendance(payload);
+      }
+
+      // TAMBAHKAN DUA FUNGSI BARU INI
+      function loadAndRenderSummary() {
+          const year = currentDate.getFullYear();
+          const month = currentDate.getMonth() + 1;
+
+          // Tampilkan nama bulan pada ringkasan
+          document.getElementById('summary-month-display').innerText = 
+              currentDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+
+          // Panggil backend untuk mendapatkan data ringkasan
+          google.script.run
+              .withSuccessHandler(response => {
+                  if (response.success) {
+                      renderSummary(response.summary);
+                  } else {
+                      console.error("Gagal memuat ringkasan:", response.error);
+                  }
+              })
+              .withFailureHandler(error => {
+                  console.error("Error server saat memuat ringkasan:", error.message);
+              })
+              .getAttendanceSummary(currentUser.email, year, month);
+      }
+
+      // GANTI FUNGSI LAMA DENGAN VERSI BARU INI
+      function renderSummary(summary) {
+          document.getElementById('summary-hari-kerja').innerText = summary.hariKerja;
+          document.getElementById('summary-kehadiran').innerText = summary.kehadiran;
+          document.getElementById('summary-alpa').innerText = summary.alpa;
+          document.getElementById('summary-alasan').innerText = summary.alasan;
+          document.getElementById('summary-persentase').innerText = summary.persentase + '%';
+          document.getElementById('summary-ceklok').innerText = summary.ceklok; // <-- BARIS BARU
       }
 
       // ===================================================================
