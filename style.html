@@ -391,4 +391,49 @@
     transform: none;
     box-shadow: none;
   }
+
+  /* --- Style untuk Tombol Sekunder di Dasbor --- */
+  .action-button.secondary {
+    background-color: #6B7280; /* Warna abu-abu */
+    margin-top: -5px; /* Sedikit merapatkan jarak */
+  }
+
+  .action-button.secondary:hover:not(:disabled) {
+    background-color: #4B5563;
+    box-shadow: 0 4px 12px rgba(107, 114, 128, 0.2);
+  }
+
+  /* --- Style untuk Modal Setting Hari Libur --- */
+  .holiday-checkbox-group {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 15px;
+    margin: 25px 0;
+    text-align: left;
+  }
+
+  .holiday-checkbox-group label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 10px 15px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    transition: all 0.2s;
+  }
+
+  .holiday-checkbox-group label:has(input:checked) {
+    background-color: #E0F2FE; /* Warna biru muda saat dipilih */
+    border-color: var(--primary-color);
+    font-weight: 600;
+    color: var(--primary-color);
+  }
+
+  .holiday-checkbox-group input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+  }
 </style>
