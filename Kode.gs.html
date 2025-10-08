@@ -125,8 +125,10 @@ function saveMonthlyAttendance(payload) {
 
   for (const date in attendance) {
     const entry = attendance[date];
-    const checkInTime = entry.checkIn || null;
-    const checkOutTime = entry.checkOut || null;
+    // --- PERBAIKAN DIMULAI DI SINI ---
+    const checkInTime = entry.checkIn ? "'" + entry.checkIn : null;
+    const checkOutTime = entry.checkOut ? "'" + entry.checkOut : null;
+    // --- PERBAIKAN SELESAI ---
     const reason = entry.reason || null;
 
     if (existingRecords[date]) {
@@ -156,11 +158,13 @@ function getMonthlyAttendance(email, year, month) {
       if (rowDateObj.getFullYear() === year && (rowDateObj.getMonth() + 1) === month) {
         const formattedDate = Utilities.formatDate(rowDateObj, TIMEZONE, "yyyy-MM-dd");
         
-        let checkIn = row[5] instanceof Date ? Utilities.formatDate(row[5], TIMEZONE, "HH:mm") : (row[5] || "");
-        let checkOut = row[6] instanceof Date ? Utilities.formatDate(row[6], TIMEZONE, "HH:mm") : (row[6] || "");
-
         // --- PERBAIKAN DIMULAI DI SINI ---
-        // Pastikan format selalu HH:mm saat dikirim kembali ke aplikasi
+        // Jika data berupa Date object, format. Jika string, gunakan langsung & hapus apostrof.
+        let checkIn = row[5] instanceof Date ? Utilities.formatDate(row[5], TIMEZONE, "HH:mm") : (row[5] || "").toString().replace(/^'/, "");
+        let checkOut = row[6] instanceof Date ? Utilities.formatDate(row[6], TIMEZONE, "HH:mm") : (row[6] || "").toString().replace(/^'/, "");
+        // --- PERBAIKAN SELESAI ---
+
+        // Logika padding nol tetap dipertahankan sebagai pengaman
         if (checkIn && checkIn.includes(':')) {
           let parts = checkIn.split(':');
           if (parts[0].length === 1) { parts[0] = '0' + parts[0]; }
@@ -173,7 +177,6 @@ function getMonthlyAttendance(email, year, month) {
           if (parts[1] && parts[1].length === 1) { parts[1] = '0' + parts[1]; }
           checkOut = parts.join(':');
         }
-        // --- PERBAIKAN SELESAI ---
 
         attendanceData[formattedDate] = {
           checkIn: checkIn,
@@ -186,7 +189,7 @@ function getMonthlyAttendance(email, year, month) {
   return attendanceData;
 }
 
-// --- FUNGSI BARU UNTUK EKSPOR EXCEL ---
+// --- FUNGSI EKSPOR EXCEL DENGAN PERBAIKAN FORMAT ---
 function exportToExcel(userEmail, selectedMonthYear, startLockId) {
   let tempSpreadsheetId = null;
   try {
@@ -211,20 +214,6 @@ function exportToExcel(userEmail, selectedMonthYear, startLockId) {
     const daysInMonth = new Date(year, month, 0).getDate();
     const TIMEZONE = "GMT";
     
-    const formatTimeToHHMM = (timeString) => {
-      if (!timeString || typeof timeString !== 'string' || !timeString.includes(':')) {
-        return "";
-      }
-      let parts = timeString.split(':');
-      let hour = parts[0] || "00";
-      let minute = parts[1] || "00";
-      
-      if (hour.length === 1) hour = '0' + hour;
-      if (minute.length === 1) minute = '0' + minute;
-      
-      return "'" + hour + ':' + minute;
-    };
-    
     for (let day = 1; day <= daysInMonth; day++) {
       const currentDate = new Date(Date.UTC(year, month - 1, day));
       
@@ -233,8 +222,8 @@ function exportToExcel(userEmail, selectedMonthYear, startLockId) {
       const dailyData = attendanceData[tanggal] || { checkIn: "", checkOut: "", reason: "" };
       const alasan = dailyData.reason || "";
       
-      const jamMasuk = alasan ? "" : formatTimeToHHMM(dailyData.checkIn);
-      const jamPulang = alasan ? "" : formatTimeToHHMM(dailyData.checkOut); 
+      const jamMasuk = alasan ? "" : dailyData.checkIn;
+      const jamPulang = alasan ? "" : dailyData.checkOut; 
       
       exportData.push([
         currentLockId, tanggal, hari, jamMasuk, jamPulang, alasan, alasan
@@ -246,8 +235,19 @@ function exportToExcel(userEmail, selectedMonthYear, startLockId) {
     tempSpreadsheetId = tempSpreadsheet.getId();
     const tempSheet = tempSpreadsheet.getSheets()[0];
     
+    // --- STRATEGI BARU: FORMAT DULU, BARU ISI DATA ---
+    if (exportData.length > 1) {
+      const numRows = exportData.length - 1;
+      // Atur format Teks (@) untuk kolom B, D, dan E SEBELUM data diisi
+      tempSheet.getRange(2, 2, numRows, 1).setNumberFormat("@"); // Kolom Tanggal
+      tempSheet.getRange(2, 4, numRows, 2).setNumberFormat("@"); // Kolom Jam Masuk & Pulang
+    }
+    SpreadsheetApp.flush(); // Terapkan perubahan format
+    
+    // Setelah format diatur, baru masukkan semua data
     const dataRange = tempSheet.getRange(1, 1, exportData.length, exportData[0].length);
     dataRange.setValues(exportData);
+    // --------------------------------------------------
     
     dataRange.setHorizontalAlignment('center');
     tempSheet.setColumnWidths(1, exportData[0].length, 120);
