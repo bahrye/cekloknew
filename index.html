@@ -536,8 +536,26 @@
               const checkInInput = row.querySelector('input[type="time"]');
               const checkOutInput = row.querySelectorAll('input[type="time"]')[1];
               const reasonSelect = row.querySelector('select');
-              const checkIn = checkInInput ? checkInInput.value : "";
-              const checkOut = checkOutInput ? checkOutInput.value : "";
+              
+              // --- PERBAIKAN DIMULAI DI SINI ---
+              let checkIn = checkInInput ? checkInInput.value : "";
+              let checkOut = checkOutInput ? checkOutInput.value : "";
+              
+              // Memastikan format jam selalu HH:mm sebelum dikirim ke server
+              if (checkIn && checkIn.includes(':')) {
+                let parts = checkIn.split(':');
+                if (parts[0].length === 1) { parts[0] = '0' + parts[0]; }
+                if (parts[1] && parts[1].length === 1) { parts[1] = '0' + parts[1]; }
+                checkIn = parts.join(':');
+              }
+              if (checkOut && checkOut.includes(':')) {
+                let parts = checkOut.split(':');
+                if (parts[0].length === 1) { parts[0] = '0' + parts[0]; }
+                if (parts[1] && parts[1].length === 1) { parts[1] = '0' + parts[1]; }
+                checkOut = parts.join(':');
+              }
+              // --- PERBAIKAN SELESAI ---
+
               const reason = reasonSelect ? reasonSelect.value : "";
               const hasCheckIn = checkIn && checkIn.trim() !== "";
               const hasCheckOut = checkOut && checkOut.trim() !== "";
