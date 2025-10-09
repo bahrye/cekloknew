@@ -7,6 +7,7 @@
  * - Menambahkan role 'staff' yang bisa mengelola absensi semua guru
  * dalam satu sekolah.
  * - Dasbor staff dengan ringkasan tabel semua guru.
+ * - Peringatan email otomatis untuk absensi yang belum lengkap.
  * ===================================================================
  */
 
@@ -988,10 +989,90 @@ function getSchoolAttendanceSummary(userEmail, year, month) {
   return summaries;
 }
 
+// --- FUNGSI BARU UNTUK PERINGATAN EMAIL ---
 
 /**
+ * ===================================================================
+ * FUNGSI UNTUK MENGIRIM PERINGATAN EMAIL
+ * Peringatan dikirim ke guru yang absensinya belum 100% pada
+ * H-5, H-3, H-2, dan H-1 sebelum akhir bulan.
+ * ===================================================================
+ */
+function sendIncompleteAttendanceReminders() {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = today.getMonth() + 1;
+  const lastDayOfMonth = new Date(year, month, 0).getDate();
+  const remainingDays = lastDayOfMonth - today.getDate();
+
+  // Cek apakah hari ini adalah salah satu hari pengiriman peringatan
+  const reminderDays = [5, 3, 2, 1];
+  if (!reminderDays.includes(remainingDays)) {
+    Logger.log(`Bukan hari pengiriman peringatan. Sisa hari: ${remainingDays}`);
+    return;
+  }
+
+  Logger.log(`Memulai proses pengiriman email peringatan untuk H-${remainingDays} akhir bulan.`);
+
+  const allUsers = usersSheet.getDataRange().getValues().slice(1);
+  const teachers = allUsers.filter(user => user[4] === 'guru');
+
+  teachers.forEach(teacher => {
+    const teacherEmail = teacher[0];
+    const teacherName = teacher[2];
+
+    const summaryResult = getAttendanceSummary(teacherEmail, year, month);
+
+    if (summaryResult.success) {
+      const summary = summaryResult.summary;
+      // Kirim email hanya jika persentase di bawah 100%
+      if (summary.persentase < 100) {
+        try {
+          const subject = `Peringatan: Pengisian Ceklok Bulan Ini Belum Lengkap`;
+          const body = `
+            <p>Halo ${teacherName},</p>
+            <p>Sistem kami mendeteksi bahwa pengisian ceklok kehadiran Anda untuk bulan ini belum mencapai 100%. Peringatan ini dikirimkan karena ${remainingDays} hari lagi adalah akhir bulan.</p>
+            <p>Mohon untuk segera melengkapi data kehadiran Anda. Berikut adalah ringkasan absensi Anda saat ini:</p>
+            <ul>
+              <li><b>Total Hari Kerja:</b> ${summary.hariKerja}</li>
+              <li><b>Total Kehadiran:</b> ${summary.kehadiran}</li>
+              <li><b>Total Alpa (Belum Diisi):</b> ${summary.alpa}</li>
+              <li><b>Total Alasan (Libur/Cuti/Dinas):</b> ${summary.alasan}</li>
+              <li><b>Total Ceklok Terisi:</b> ${summary.ceklok} dari ${summary.hariKerja} hari kerja</li>
+              <li><b>Persentase Kelengkapan:</b> ${summary.persentase}%</li>
+            </ul>
+            <p>Anda dapat melengkapi absensi melalui aplikasi Ceklok seperti biasa.</p>
+            <p>Terima kasih atas perhatian Anda.</p>
+            <br>
+            <p><em>Ini adalah email otomatis. Mohon untuk tidak membalas email ini.</em></p>
+          `;
+
+          MailApp.sendEmail({
+            to: teacherEmail,
+            subject: subject,
+            htmlBody: body,
+            name: "Sistem Ceklok Otomatis"
+          });
+          Logger.log(`Email peringatan berhasil dikirim ke: ${teacherEmail}`);
+        } catch (e) {
+          Logger.log(`Gagal mengirim email ke ${teacherEmail}. Error: ${e.message}`);
+        }
+      } else {
+        Logger.log(`Absensi untuk ${teacherEmail} sudah 100%. Tidak ada email yang dikirim.`);
+      }
+    } else {
+      Logger.log(`Gagal mendapatkan ringkasan untuk ${teacherEmail}. Error: ${summaryResult.error}`);
+    }
+  });
+  Logger.log('Proses pengiriman email peringatan selesai.');
+}
+
+
+/**
+ * ===================================================================
  * FUNGSI UTILITAS: Jalankan fungsi ini SATU KALI dari editor skrip
  * untuk mengonversi semua data waktu yang sudah ada ke format Teks.
+ * ===================================================================
  */
 function formatExistingAttendanceTimes() {
   const sheet = SpreadsheetApp.openById("1EIQY1DeGcwhEaYojbGMah-S5HbtsrON5YRy37bl_vLg").getSheetByName("Attendance");
@@ -1016,4 +1097,31 @@ function formatExistingAttendanceTimes() {
   } else {
     Logger.log("Tidak ada data untuk diformat.");
   }
+}
+
+/**
+ * ===================================================================
+ * FUNGSI UTILITAS UNTUK SETUP TRIGGER
+ * Jalankan fungsi ini SATU KALI dari editor skrip untuk membuat
+ * trigger harian yang akan menjalankan pengecekan.
+ * ===================================================================
+ */
+function setupDailyTrigger() {
+  // Hapus trigger lama agar tidak duplikat
+  const triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(trigger => {
+    if (trigger.getHandlerFunction() === 'sendIncompleteAttendanceReminders') {
+      ScriptApp.deleteTrigger(trigger);
+      Logger.log('Trigger lama berhasil dihapus.');
+    }
+  });
+
+  // Buat trigger baru untuk berjalan setiap hari antara jam 8-9 pagi
+  ScriptApp.newTrigger('sendIncompleteAttendanceReminders')
+    .timeBased()
+    .everyDays(1)
+    .atHour(8)
+    .create();
+
+  Logger.log('Trigger harian untuk pengingat email berhasil dibuat.');
 }
