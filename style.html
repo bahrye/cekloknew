@@ -29,7 +29,7 @@
 
   .container {
     width: 100%;
-    max-width: 550px;
+    max-width: 650px; /* Lebarkan container untuk tabel staff */
     padding: 20px;
   }
 
@@ -40,7 +40,7 @@
     box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05), 0 4px 6px -2px rgba(0,0,0,0.04);
     text-align: center;
     border: 1px solid var(--border-color);
-    position: relative; /* Diperlukan untuk tombol kembali */
+    position: relative;
   }
 
   h2 {
@@ -70,12 +70,12 @@
 
   input[type="email"], input[type="password"], input[type="text"], input[type="number"], input[type="date"], select, input[type="month"] {
     width: 100%;
-    padding: 14px 15px; /* Tinggi input ditambah sedikit */
+    padding: 14px 15px;
     border: 1px solid var(--border-color);
     border-radius: 8px;
     box-sizing: border-box;
     font-family: 'Poppins', sans-serif;
-    font-size: 14px; /* Menyamakan ukuran font */
+    font-size: 14px;
     transition: border-color 0.3s, box-shadow 0.3s;
   }
 
@@ -127,12 +127,11 @@
     min-height: 20px;
   }
 
-  #guru-welcome-message small {
+  #guru-welcome-message small, #staff-welcome-message small {
     font-weight: normal;
     color: var(--text-secondary-color);
   }
 
-  /* --- Navigator Bulan --- */
   .month-navigator {
     display: flex;
     justify-content: space-between;
@@ -159,8 +158,7 @@
     font-weight: 600;
   }
 
-  /* --- Tabel Absensi --- */
-  #attendance-table-container {
+  #attendance-table-container, #staff-summary-table-container {
     max-height: 45vh;
     overflow-y: auto;
     margin-bottom: 20px;
@@ -265,7 +263,7 @@
     cursor: not-allowed;
   }
   
-  /* --- Style Admin Panel & Tabs --- */
+  /* Style Admin Panel & Tabs */
   .nav-tabs {
     display: flex;
     border-bottom: 1px solid var(--border-color);
@@ -304,7 +302,7 @@
     font-weight: bold; cursor: pointer;
   }
 
-  #announcement-section {
+  #announcement-section, #staff-announcement-section {
     background-color: #E0F2FE;
     border-left: 5px solid #0EA5E9;
     border-radius: 8px;
@@ -312,13 +310,13 @@
     margin-bottom: 24px;
     text-align: left;
   }
-  #announcement-section h3 {
+  #announcement-section h3, #staff-announcement-section h3 {
     margin-top: 0;
     margin-bottom: 8px;
     color: #0369A1;
     font-size: 16px;
   }
-  #announcement-section p {
+  #announcement-section p, #staff-announcement-section p {
     margin-bottom: 0;
     color: #075985;
     white-space: pre-wrap;
@@ -340,7 +338,7 @@
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
   }
 
-  /* Style untuk Dasbor Guru */
+  /* Style untuk Dasbor Guru & Staff */
   .dashboard-actions {
     margin-top: 30px;
   }
@@ -380,7 +378,7 @@
     box-shadow: none;
   }
 
-  #summary-section {
+  #summary-section, #staff-summary-section {
     margin-top: 25px;
     margin-bottom: 25px;
     padding: 20px;
@@ -403,8 +401,7 @@
     color: var(--text-primary-color);
   }
   
-  /* --- STYLE BARU UNTUK INPUT BULAN DI RINGKASAN --- */
-  #summary-month-input {
+  #summary-month-input, #staff-summary-month-input {
       background-color: transparent;
       border: none;
       font-size: 14px;
@@ -414,18 +411,17 @@
       text-align: right;
       padding: 5px;
       cursor: pointer;
-      width: 140px; /* Lebar agar pas */
+      width: 140px;
       border-radius: 6px;
       transition: box-shadow 0.3s;
   }
-  #summary-month-input:hover {
+  #summary-month-input:hover, #staff-summary-month-input:hover {
       background-color: #f0f0f0;
   }
-  #summary-month-input:focus {
+  #summary-month-input:focus, #staff-summary-month-input:focus {
       outline: none;
       box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
   }
-  /* ----------------------------------------------- */
 
   .summary-grid {
     display: grid;
@@ -535,5 +531,14 @@
   }
   .slider.round:before {
       border-radius: 50%;
+  }
+
+  /* Style untuk tabel ringkasan staff */
+  #staff-summary-table td {
+    text-align: center;
+  }
+  #staff-summary-table td:first-child {
+    text-align: left;
+    font-weight: 500;
   }
 </style>
