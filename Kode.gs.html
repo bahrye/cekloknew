@@ -222,20 +222,26 @@ function saveMonthlyAttendance(payload) {
   return { status: "success", message: "Absensi bulan ini berhasil diperbarui!" };
 }
 
+// GANTI FUNGSI LAMA DENGAN VERSI BARU INI DI Kode.gs
+
 function getMonthlyAttendance(email, year, month) {
   const attendanceData = {};
-  const data = attendanceSheet.getDataRange().getValues();
+  const data = attendanceSheet.getDataRange().getValues(); // KEMBALI MENGGUNAKAN METODE LAMA UNTUK STABILITAS
   const TIMEZONE = "GMT+8";
+  
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
-    if (row[1] === email && row[4] instanceof Date) {
+    // Pastikan semua kolom yang diperlukan ada sebelum diproses
+    if (row[1] && row[4] && row[1] === email && row[4] instanceof Date) {
       const rowDateObj = row[4];
       if (rowDateObj.getFullYear() === year && (rowDateObj.getMonth() + 1) === month) {
         const formattedDate = Utilities.formatDate(rowDateObj, TIMEZONE, "yyyy-MM-dd");
         
+        // Logika parsing waktu yang andal dari fungsi asli Anda
         let checkIn = row[5] instanceof Date ? Utilities.formatDate(row[5], TIMEZONE, "HH:mm") : (row[5] || "").toString().replace(/^'/, "");
         let checkOut = row[6] instanceof Date ? Utilities.formatDate(row[6], TIMEZONE, "HH:mm") : (row[6] || "").toString().replace(/^'/, "");
 
+        // Standarisasi format ke HH:mm jika perlu
         if (checkIn && checkIn.includes(':')) {
           let parts = checkIn.split(':');
           if (parts[0].length === 1) { parts[0] = '0' + parts[0]; }
@@ -354,6 +360,7 @@ function exportToExcel(userEmail, selectedMonthYear, startLockId) {
     }
   }
 }
+
 
 function parseDateFromExcel(cellValue) {
   if (cellValue instanceof Date && !isNaN(cellValue)) {
