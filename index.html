@@ -9,7 +9,7 @@
     
       <div id="login-container">
          <div class="card">
-          <h2>Ceklok Guru & Admin</h2>
+          <h2>Ceklok Guru, Staff & Admin</h2>
           <p>Silakan login untuk melanjutkan</p>
           <div class="input-group">
             <label for="email">Email</label>
@@ -117,10 +117,76 @@
         </div>
       </div>
 
+      <div id="staff-dashboard-container" style="display:none;">
+        <div class="card">
+          <h2 id="staff-welcome-message"></h2>
+          <div id="staff-announcement-section">
+            <h3>Pengumuman</h3>
+            <p id="staff-announcement-text">Tidak ada pengumuman saat ini.</p>
+          </div>
+          
+          <div id="staff-summary-section">
+              <div class="summary-title">
+                  <h3>Ringkasan Bulanan Sekolah</h3>
+                  <input type="month" id="staff-summary-month-input" onchange="loadStaffSummary()">
+              </div>
+              <div id="staff-summary-table-container">
+                <p>Memuat ringkasan guru...</p>
+              </div>
+          </div>
+          <hr style="margin: 25px 0;">
+
+          <h3>Unduh Rekap</h3>
+          <div class="input-group">
+            <label for="staff-rekap-month">Pilih Bulan dan Tahun</label>
+            <input type="month" id="staff-rekap-month">
+          </div>
+          <button onclick="handleStaffDownloadAllRekap()" id="staff-download-all-rekap-button" class="action-button">
+              Unduh Rekap Semua Guru
+          </button>
+          <p id="staff-rekap-all-message" class="message" style="margin-top: 5px;"></p>
+          <hr style="margin: 25px 0;">
+
+          <h3>CEKLOK</h3>
+          <div class="input-group">
+            <label for="staff-teacher-select-ceklok">Pilih Guru untuk Mengisi Ceklok</label>
+            <select id="staff-teacher-select-ceklok">
+              <option value="">-- Memuat Guru --</option>
+            </select>
+          </div>
+          <div class="dashboard-actions" style="margin-top: 10px;">
+            <button class="action-button" onclick="showCeklokPageForStaff()">
+              <span>Isi Ceklok Kehadiran</span>
+            </button>
+          </div>
+          <hr style="margin: 25px 0;">
+
+          <div id="staff-emis-section">
+            <h3>EMIS</h3>
+            <div class="input-group">
+              <label for="staff-teacher-select-emis">Pilih Guru untuk Proses EMIS</label>
+              <select id="staff-teacher-select-emis">
+                <option value="">-- Memuat Guru --</option>
+              </select>
+            </div>
+            <div class="dashboard-actions" style="margin-top: 10px;">
+              <button onclick="showEmisImportPageForStaff()" class="action-button">
+                Import
+              </button>
+              <button onclick="showEmisExportPageForStaff()" class="action-button secondary">
+                Eksport
+              </button>
+            </div>
+          </div>
+          <hr style="margin: 25px 0; border: none; border-top: 1px solid #E5E7EB;">
+          <button class="logout" onclick="handleLogout()">Logout</button>
+        </div>
+      </div>
       <div id="ceklok-container" style="display:none;">
         <div class="card">
-          <button class="back-button" onclick="showGuruDashboard()">&larr; Kembali ke Dasbor</button>
+          <button class="back-button" onclick="goBackToDashboard()">&larr; Kembali ke Dasbor</button>
           <h2 style="margin-top: 15px;">Formulir Kehadiran</h2>
+          <h3 id="ceklok-teacher-name" style="margin-top: -10px; margin-bottom: 15px; font-weight: 500; color: var(--text-secondary-color);"></h3>
           <div id="global-lock-message" class="message" style="color: #b91c1c; margin-bottom: 15px;"></div>
           <div class="month-navigator">
             <button onclick="changeMonth(-1)">&#9664; Bulan Lalu</button>
@@ -135,7 +201,7 @@
       
       <div id="teacher-holiday-settings-container" style="display:none;">
         <div class="card">
-            <button class="back-button" onclick="showGuruDashboard()">&larr; Kembali ke Dasbor</button>
+            <button class="back-button" onclick="goBackToDashboard()">&larr; Kembali ke Dasbor</button>
             <h2 style="margin-top: 15px;">Pengaturan Hari Libur Mengajar</h2>
             <p>Pilih hari di mana Anda tidak ada jadwal mengajar. Hari yang dipilih akan otomatis ditandai sebagai "Hari Libur Sekolah" pada halaman absensi.</p>
             <div id="holiday-switches-container">
@@ -147,9 +213,10 @@
       
       <div id="emis-import-container" style="display:none;">
         <div class="card">
-          <button class="back-button" onclick="showGuruDashboard()">&larr; Kembali ke Dasbor</button>
+          <button class="back-button" onclick="goBackToDashboard()">&larr; Kembali ke Dasbor</button>
           <h2 style="margin-top: 15px;">Import Data Kehadiran EMIS</h2>
-          <p>Pilih file Excel (.xlsx, .xls) yang berisi data kehadiran. Pastikan header file berisi: <strong>TANGGAL, JAM MASUK, JAM PULANG, ALASAN TIDAK HADIR</strong>.</p>
+          <h3 id="emis-import-teacher-name" style="margin-top: -10px; margin-bottom: 15px; font-weight: 500; color: var(--text-secondary-color);"></h3>
+          <p>Pilih file Excel (.xlsx, .xls) yang berisi data kehadiran. Pastikan file adalah hasil download dari <strong>Aplikasi EMIS</strong>.</p>
           <div class="input-group">
             <label for="emis-file-input">Pilih File Excel</label>
             <input type="file" id="emis-file-input" accept=".xlsx, .xls" style="padding: 10px; height: auto;">
@@ -161,9 +228,10 @@
 
       <div id="emis-export-container" style="display:none;">
         <div class="card">
-          <button class="back-button" onclick="showGuruDashboard()">&larr; Kembali ke Dasbor</button>
+          <button class="back-button" onclick="goBackToDashboard()">&larr; Kembali ke Dasbor</button>
           <h2 style="margin-top: 15px;">Eksport Data Kehadiran</h2>
-          <p>Fitur ini akan membuat file Excel (.xlsx) berisi data kehadiran Anda untuk bulan yang dipilih, lengkap dengan LOCK ID yang berurutan.</p>
+          <h3 id="emis-export-teacher-name" style="margin-top: -10px; margin-bottom: 15px; font-weight: 500; color: var(--text-secondary-color);"></h3>
+          <p>Fitur ini akan membuat file Excel (.xlsx) berisi data kehadiran Anda untuk bulan yang dipilih, lengkap dengan LOCK ID yang berurutan. Akan diupload ke <strong>Aplikasi EMIS</strong>.</p>
           <div class="input-group">
             <label for="emis-export-month">Pilih Bulan dan Tahun</label>
             <input type="month" id="emis-export-month">
@@ -186,15 +254,15 @@
               </div>
               
               <div id="kelola-akun" class="tab-content active">
-                  <h3>Daftar Akun Guru</h3>
+                  <h3>Daftar Akun</h3>
                   <button onclick="openUserForm()">+ Tambah Akun Baru</button>
                   <div id="user-table-container" style="margin-top: 15px;"></div>
               </div>
 
               <div id="pengaturan" class="tab-content">
-                  <h3>Pengumuman untuk Guru</h3>
+                  <h3>Pengumuman untuk Guru & Staff</h3>
                   <div class="input-group">
-                    <label for="announcement-input">Tulis pengumuman di sini. Akan tampil di dasbor semua guru.</label>
+                    <label for="announcement-input">Tulis pengumuman di sini. Akan tampil di dasbor semua guru dan staff.</label>
                     <textarea id="announcement-input" rows="4"></textarea>
                     <button onclick="saveAnnouncementsSettings()" style="width: auto; margin-top: 10px;">Simpan Pengumuman</button>
                     <p id="announcements-message" class="message"></p>
@@ -247,7 +315,7 @@
         <div class="input-group"> <label for="user-password">Password</label> <input type="text" id="user-password"> </div>
         <div class="input-group"> <label for="user-name">Nama Lengkap</label> <input type="text" id="user-name"> </div>
         <div class="input-group"> <label for="user-school">Sekolah</label> <input type="text" id="user-school"> </div>
-        <div class="input-group"> <label for="user-role">Peran</label> <select id="user-role"><option value="guru">Guru</option><option value="admin">Admin</option></select> </div>
+        <div class="input-group"> <label for="user-role">Peran</label> <select id="user-role"><option value="guru">Guru</option><option value="staff">Staff</option><option value="admin">Admin</option></select> </div>
         <button onclick="handleUserSave()">Simpan</button>
         <p id="user-form-message" class="message"></p>
       </div>
@@ -260,6 +328,8 @@
       let currentUser = null;
       let currentDate = new Date();
       let appSettings = { lockedMonths: [], holidays: {}, announcements: "", teacherHolidays: [] };
+      let selectedTeacherForStaff = null; // Menyimpan data guru yang dipilih oleh staff
+      let schoolTeachers = []; // Menyimpan daftar guru satu sekolah
       const SPREADSHEET_ID = "1EIQY1DeGcwhEaYojbGMah-S5HbtsrON5YRy37bl_vLg";
 
       // ===================================================================
@@ -283,6 +353,8 @@
           currentUser = JSON.parse(userSession);
           if (currentUser.role === 'admin') {
             showAdminDashboard(currentUser);
+          } else if (currentUser.role === 'staff') {
+            showStaffDashboard(currentUser);
           } else {
             showGuruDashboard(currentUser);
           }
@@ -316,6 +388,8 @@
               currentUser = response;
               if (response.role === 'admin') {
                 showAdminDashboard(response);
+              } else if (response.role === 'staff') {
+                showStaffDashboard(response);
               } else {
                 showGuruDashboard(response);
               }
@@ -337,8 +411,12 @@
         sessionStorage.removeItem('ceklokUser');
         currentUser = null;
         currentDate = new Date();
+        selectedTeacherForStaff = null;
+        schoolTeachers = [];
+
         document.getElementById("login-container").style.display = "block";
         document.getElementById("guru-dashboard-container").style.display = "none";
+        document.getElementById("staff-dashboard-container").style.display = "none";
         document.getElementById("ceklok-container").style.display = "none";
         document.getElementById("admin-container").style.display = "none";
         document.getElementById("teacher-holiday-settings-container").style.display = "none";
@@ -353,6 +431,13 @@
           loginButton.textContent = 'Login';
         }
       }
+
+      function goBackToDashboard() {
+        if (!currentUser) return;
+        if (currentUser.role === 'admin') showAdminDashboard();
+        else if (currentUser.role === 'staff') showStaffDashboard();
+        else showGuruDashboard();
+      }
       
       // ===================================================================
       // LOGIKA UNTUK GURU
@@ -360,6 +445,7 @@
       function showGuruDashboard(userData) {
           if (userData) currentUser = userData;
           document.getElementById("login-container").style.display = "none";
+          document.getElementById("staff-dashboard-container").style.display = "none";
           document.getElementById("ceklok-container").style.display = "none";
           document.getElementById("admin-container").style.display = "none";
           document.getElementById("teacher-holiday-settings-container").style.display = "none";
@@ -381,6 +467,7 @@
         document.getElementById("emis-export-container").style.display = "none";
         document.getElementById("teacher-holiday-settings-container").style.display = "none";
         document.getElementById("ceklok-container").style.display = "block";
+        document.getElementById('ceklok-teacher-name').innerText = ''; // Kosongkan nama guru
         loadMonthData(currentDate);
       }
 
@@ -400,6 +487,7 @@
         document.getElementById("teacher-holiday-settings-container").style.display = "none";
         document.getElementById("emis-export-container").style.display = "none";
         document.getElementById("emis-import-container").style.display = "block";
+        document.getElementById('emis-import-teacher-name').innerText = '';
       }
 
       function showEmisExportPage() {
@@ -408,6 +496,7 @@
         document.getElementById("teacher-holiday-settings-container").style.display = "none";
         document.getElementById("emis-import-container").style.display = "none";
         document.getElementById("emis-export-container").style.display = "block";
+        document.getElementById('emis-export-teacher-name').innerText = '';
       }
       
       function renderAnnouncements(text) {
@@ -423,6 +512,8 @@
       function loadMonthData(date){
          const year = date.getFullYear();
          const month = date.getMonth() + 1;
+         const userEmail = (currentUser.role === 'staff' && selectedTeacherForStaff) ? selectedTeacherForStaff.email : currentUser.email;
+
          document.getElementById('month-display').innerText = date.toLocaleString('id-ID', { month: 'long', year: 'numeric' });
          document.getElementById('attendance-table-container').innerHTML = '<div>Memuat data...</div>';
          google.script.run
@@ -435,7 +526,7 @@
             };
             generateMonthTable(year, month, response.attendance);
           })
-          .getAppSettingsForUser(currentUser.email, year, month);
+          .getAppSettingsForUser(userEmail, year, month);
       }
 
       function generateMonthTable(year, month, attendanceData) {
@@ -524,29 +615,28 @@
       
       function handleSave() {
           const button = document.getElementById('save-button');
-          // Clear previous validation errors
           document.querySelectorAll('#attendance-table-container tr.invalid-row').forEach(row => {
               row.classList.remove('invalid-row');
           });
-
-          const payload = { email: currentUser.email, name: currentUser.name, school: currentUser.school, attendance: {} };
+          
+          const targetUser = (currentUser.role === 'staff' && selectedTeacherForStaff) ? selectedTeacherForStaff : currentUser;
+          const payload = { email: targetUser.email, name: targetUser.name, school: targetUser.school, attendance: {} };
+          
           const rows = document.querySelectorAll('#attendance-table-container tbody tr');
           let validationError = false;
           let firstErrorRow = null;
 
           rows.forEach(row => {
               const date = row.id.replace('row-', '');
-              if (!date || !row.querySelector('input[type="time"]')) return; // Skip non-data rows
+              if (!date || !row.querySelector('input[type="time"]')) return;
 
               const checkInInput = row.querySelector('input[type="time"]');
               const checkOutInput = row.querySelectorAll('input[type="time"]')[1];
               const reasonSelect = row.querySelector('select');
 
-              // --- PERBAIKAN DIMULAI DI SINI ---
               let checkIn = checkInInput ? checkInInput.value : "";
               let checkOut = checkOutInput ? checkOutInput.value : "";
 
-              // Function to ensure time is in HH:mm format
               const formatToHHMM = (time) => {
                 if (time && time.includes(':')) {
                   let parts = time.split(':');
@@ -559,14 +649,12 @@
               
               checkIn = formatToHHMM(checkIn);
               checkOut = formatToHHMM(checkOut);
-              // --- PERBAIKAN SELESAI ---
 
               const reason = reasonSelect ? reasonSelect.value : "";
               const hasCheckIn = checkIn && checkIn.trim() !== "";
               const hasCheckOut = checkOut && checkOut.trim() !== "";
               const hasReason = reason && reason.trim() !== "";
 
-              // Validation: if one time is filled, the other must be too
               if (!hasReason && ((hasCheckIn && !hasCheckOut) || (!hasCheckIn && hasCheckOut))) {
                   validationError = true;
                   row.classList.add('invalid-row');
@@ -595,10 +683,11 @@
           google.script.run
               .withSuccessHandler(r => {
                   displayMessage('save-message', r.message, true);
-                  button.disabled = false; // Re-enable button
+                  button.disabled = false;
                   button.textContent = "Simpan Semua Perubahan";
-                  loadMonthData(currentDate); // Reload data to show fresh state
-                  loadAndRenderSummary();
+                  loadMonthData(currentDate); 
+                  if (currentUser.role === 'guru') loadAndRenderSummary();
+                  else if (currentUser.role === 'staff') loadStaffSummary();
               })
               .withFailureHandler(e => {
                   displayMessage('save-message', "Error: " + e.message);
@@ -717,7 +806,6 @@
               .saveTeacherHolidays(currentUser.email, settings);
       }
 
-      // --- FUNGSI BARU DAN MODIFIKASI UNTUK EMIS ---
       function handleEmisImport() {
           const fileInput = document.getElementById('emis-file-input');
           const file = fileInput.files[0];
@@ -729,6 +817,8 @@
           button.disabled = true;
           button.textContent = 'Mengimpor...';
           displayMessage('emis-import-message', 'Sedang mengunggah dan memproses file...', true);
+          
+          const targetEmail = (currentUser.role === 'staff' && selectedTeacherForStaff) ? selectedTeacherForStaff.email : currentUser.email;
 
           const reader = new FileReader();
           reader.onload = (e) => {
@@ -743,34 +833,24 @@
                   .withSuccessHandler(response => {
                       button.disabled = false;
                       button.textContent = 'Proses Import';
-                      
-                      // --- PERBAIKAN: Logika baru untuk pesan sukses dan navigasi otomatis ---
                       if (response.status === 'success') {
-                          // 1. Buat pesan sukses yang dinamis
                           const successMessage = `Import bulan ${response.monthName} ${response.year} berhasil, data yang terinput sebanyak ${response.count} data.`;
                           displayMessage('emis-import-message', successMessage, true);
-                          
-                          fileInput.value = ""; // Reset input file
-
-                          // 2. Atur tanggal global ke bulan yang diimpor
+                          fileInput.value = "";
                           currentDate = new Date(response.year, response.month - 1, 1);
-                          
-                          // 3. Pindah ke halaman ceklok setelah 2.5 detik
                           setTimeout(() => {
-                              showCeklokPage();
+                              (currentUser.role === 'staff') ? showCeklokPageForStaff(true) : showCeklokPage();
                           }, 2500); 
                       } else {
-                          // Jika gagal, tampilkan pesan error seperti biasa
                           displayMessage('emis-import-message', response.message, false);
                       }
-                      // --- PERBAIKAN SELESAI ---
                   })
                   .withFailureHandler(error => {
                       displayMessage('emis-import-message', 'Error: ' + error.message);
                       button.disabled = false;
                       button.textContent = 'Proses Import';
                   })
-                  .importFromEmis(currentUser.email, fileData);
+                  .importFromEmis(targetEmail, fileData);
           };
           reader.readAsDataURL(file);
       }
@@ -779,6 +859,7 @@
         const monthInput = document.getElementById('emis-export-month').value;
         const lockIdInput = document.getElementById('lock-id-input').value;
         const button = document.getElementById('export-emis-button');
+        const targetEmail = (currentUser.role === 'staff' && selectedTeacherForStaff) ? selectedTeacherForStaff.email : currentUser.email;
 
         if (!monthInput) {
           displayMessage('emis-export-message', 'Silakan pilih bulan dan tahun terlebih dahulu.');
@@ -814,7 +895,170 @@
             button.disabled = false;
             button.textContent = 'Download Template';
           })
-          .exportToExcel(currentUser.email, monthInput, lockIdInput);
+          .exportToExcel(targetEmail, monthInput, lockIdInput);
+      }
+      
+      // ===================================================================
+      // LOGIKA BARU UNTUK STAFF
+      // ===================================================================
+      function showStaffDashboard(userData) {
+          if (userData) currentUser = userData;
+          document.getElementById("login-container").style.display = "none";
+          document.getElementById("guru-dashboard-container").style.display = "none";
+          document.getElementById("ceklok-container").style.display = "none";
+          document.getElementById("admin-container").style.display = "none";
+          document.getElementById("staff-dashboard-container").style.display = "block";
+          document.getElementById("staff-welcome-message").innerHTML = `Halo Staff, <strong>${currentUser.name}</strong><br><small>${currentUser.school}</small>`;
+          
+          loadSchoolTeachers();
+          loadStaffSummary();
+
+          google.script.run.withSuccessHandler(response => {
+            const p = document.getElementById('staff-announcement-text');
+            p.innerText = (response.announcements && response.announcements.trim() !== "") ? response.announcements : "Tidak ada pengumuman saat ini.";
+          }).getAppSettingsForUser(currentUser.email, currentDate.getFullYear(), currentDate.getMonth() + 1);
+      }
+
+      function loadSchoolTeachers() {
+        google.script.run
+          .withSuccessHandler(teachers => {
+            schoolTeachers = teachers;
+            const selectCeklok = document.getElementById('staff-teacher-select-ceklok');
+            const selectEmis = document.getElementById('staff-teacher-select-emis');
+            selectCeklok.innerHTML = '<option value="">-- Pilih Guru --</option>';
+            selectEmis.innerHTML = '<option value="">-- Pilih Guru --</option>';
+            teachers.forEach(teacher => {
+              const option = document.createElement('option');
+              option.value = teacher.email;
+              option.textContent = teacher.name;
+              selectCeklok.appendChild(option.cloneNode(true));
+              selectEmis.appendChild(option);
+            });
+          })
+          .getSchoolTeachers(currentUser.email);
+      }
+
+      function loadStaffSummary() {
+          const monthInput = document.getElementById('staff-summary-month-input');
+          if (!monthInput.value) {
+            const now = new Date();
+            monthInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+          }
+          const [year, month] = monthInput.value.split('-').map(Number);
+          const container = document.getElementById('staff-summary-table-container');
+          container.innerHTML = '<p>Memuat ringkasan guru...</p>';
+
+          google.script.run
+            .withSuccessHandler(summaries => {
+              renderStaffSummaryTable(summaries);
+            })
+            .withFailureHandler(err => {
+              container.innerHTML = `<p style="color: var(--danger-color);">Gagal memuat: ${err.message}</p>`;
+            })
+            .getSchoolAttendanceSummary(currentUser.email, year, month);
+      }
+
+      function renderStaffSummaryTable(summaries) {
+        const container = document.getElementById('staff-summary-table-container');
+        let tableHTML = '<table id="staff-summary-table"><thead><tr><th>Nama Guru</th><th>Hari Kerja</th><th>Hadir</th><th>Alpa</th><th>Alasan</th><th>Persentase</th><th>Ceklok</th></tr></thead><tbody>';
+        if (summaries && summaries.length > 0) {
+          summaries.forEach(item => {
+            tableHTML += `
+              <tr>
+                <td>${item.name}</td>
+                <td>${item.summary.hariKerja}</td>
+                <td>${item.summary.kehadiran}</td>
+                <td>${item.summary.alpa}</td>
+                <td>${item.summary.alasan}</td>
+                <td>${item.summary.persentase}%</td>
+                <td>${item.summary.ceklok}</td>
+              </tr>
+            `;
+          });
+        } else {
+          tableHTML += '<tr><td colspan="7">Tidak ada data guru untuk ditampilkan.</td></tr>';
+        }
+        tableHTML += '</tbody></table>';
+        container.innerHTML = tableHTML;
+      }
+      
+      function getSelectedTeacher(selectId) {
+          const select = document.getElementById(selectId);
+          const email = select.value;
+          if (!email) {
+              alert('Silakan pilih seorang guru terlebih dahulu.');
+              return null;
+          }
+          return schoolTeachers.find(t => t.email === email);
+      }
+
+      function showCeklokPageForStaff(isRedirect = false) {
+          if (!isRedirect) { // Hanya pilih guru jika bukan redirect dari import
+              selectedTeacherForStaff = getSelectedTeacher('staff-teacher-select-ceklok');
+          }
+          if (!selectedTeacherForStaff) return;
+          
+          document.getElementById("staff-dashboard-container").style.display = "none";
+          document.getElementById("ceklok-container").style.display = "block";
+          document.getElementById('ceklok-teacher-name').innerText = `Untuk: ${selectedTeacherForStaff.name}`;
+          loadMonthData(currentDate);
+      }
+      
+      function showEmisImportPageForStaff() {
+          selectedTeacherForStaff = getSelectedTeacher('staff-teacher-select-emis');
+          if (!selectedTeacherForStaff) return;
+          
+          document.getElementById("staff-dashboard-container").style.display = "none";
+          document.getElementById("emis-import-container").style.display = "block";
+          document.getElementById('emis-import-teacher-name').innerText = `Untuk: ${selectedTeacherForStaff.name}`;
+      }
+      
+      function showEmisExportPageForStaff() {
+          selectedTeacherForStaff = getSelectedTeacher('staff-teacher-select-emis');
+          if (!selectedTeacherForStaff) return;
+
+          document.getElementById("staff-dashboard-container").style.display = "none";
+          document.getElementById("emis-export-container").style.display = "block";
+          document.getElementById('emis-export-teacher-name').innerText = `Untuk: ${selectedTeacherForStaff.name}`;
+      }
+
+      function handleStaffDownloadAllRekap() {
+          const monthInput = document.getElementById('staff-rekap-month').value;
+          const button = document.getElementById('staff-download-all-rekap-button');
+          if (!monthInput) {
+              displayMessage('staff-rekap-all-message', 'Silakan pilih bulan dan tahun terlebih dahulu.');
+              return;
+          }
+          const userSchool = currentUser.school;
+          if (!userSchool) {
+              displayMessage('staff-rekap-all-message', 'Informasi sekolah Anda tidak ditemukan.');
+              return;
+          }
+          button.disabled = true;
+          button.textContent = 'Membuat PDF...';
+          displayMessage('staff-rekap-all-message', 'Sedang memproses rekap semua guru...', true);
+          google.script.run
+              .withSuccessHandler(response => {
+                  if (response.success) {
+                      const link = document.createElement('a');
+                      link.href = `data:application/pdf;base64,${response.pdfData}`;
+                      link.download = response.fileName;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                      displayMessage('staff-rekap-all-message', 'PDF berhasil dibuat dan sedang diunduh!', true);
+                  } else {
+                      displayMessage('staff-rekap-all-message', 'Error: ' + response.error);
+                  }
+                  button.disabled = false;
+                  button.textContent = 'Unduh Rekap Semua Guru';
+              })
+              .withFailureHandler(error => {
+                  displayMessage('staff-rekap-all-message', 'Error: ' + error.message);
+                  button.disabled = false;
+                  button.textContent = 'Unduh Rekap Semua Guru';
+              })
+              .prepareSchoolRekapForPrint(currentUser.email, monthInput, userSchool);
       }
 
 
@@ -822,11 +1066,13 @@
       // LOGIKA UNTUK ADMIN
       // ===================================================================
       function showAdminDashboard(userData) {
+        if (userData) currentUser = userData;
         document.getElementById("login-container").style.display = "none";
         document.getElementById("guru-dashboard-container").style.display = "none";
+        document.getElementById("staff-dashboard-container").style.display = "none";
         document.getElementById("ceklok-container").style.display = "none";
         document.getElementById("admin-container").style.display = "block";
-        document.getElementById("admin-welcome-message").innerHTML = `Halo Admin, <strong>${userData.name}</strong>`;
+        document.getElementById("admin-welcome-message").innerHTML = `Halo Admin, <strong>${currentUser.name}</strong>`;
         loadUsers();
         loadAdminSettings();
         loadSchoolDropdown();
@@ -882,8 +1128,13 @@
         const apiCall = userData.originalEmail ? 'updateUser' : 'addUser';
         google.script.run.withSuccessHandler(r => {
           if (r.status === 'success') {
-            closeUserForm();
-            loadUsers();
+            displayMessage('user-form-message', r.message, true);
+            setTimeout(() => {
+              closeUserForm();
+              loadUsers();
+            }, 1500);
+          } else {
+            displayMessage('user-form-message', r.message, false);
           }
         })[apiCall](currentUser.email, userData);
       }
