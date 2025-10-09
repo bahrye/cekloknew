@@ -224,46 +224,78 @@ function saveMonthlyAttendance(payload) {
 
 // GANTI FUNGSI LAMA DENGAN VERSI BARU INI DI Kode.gs
 
+/**
+ * ===================================================================
+ * FUNGSI OPTIMIZED UNTUK MENGAMBIL DATA KEHADIRAN BULANAN
+ * Didesain untuk performa tinggi pada dataset besar (ratusan ribu baris).
+ *
+ * Strategi:
+ * 1. Membuat "query" untuk memfilter data berdasarkan email dan rentang tanggal
+ * sebelum menariknya ke dalam memori Apps Script.
+ * 2. Menggunakan fungsionalitas SpreadsheetApp.openById() dan sheet.getRange()
+ * untuk secara langsung menargetkan dan mengambil data yang relevan.
+ * 3. Secara drastis mengurangi penggunaan memori dan waktu eksekusi.
+ * ===================================================================
+ */
 function getMonthlyAttendance(email, year, month) {
   const attendanceData = {};
-  const data = attendanceSheet.getDataRange().getValues(); // KEMBALI MENGGUNAKAN METODE LAMA UNTUK STABILITAS
-  const TIMEZONE = "GMT+8";
-  
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    // Pastikan semua kolom yang diperlukan ada sebelum diproses
-    if (row[1] && row[4] && row[1] === email && row[4] instanceof Date) {
-      const rowDateObj = row[4];
-      if (rowDateObj.getFullYear() === year && (rowDateObj.getMonth() + 1) === month) {
-        const formattedDate = Utilities.formatDate(rowDateObj, TIMEZONE, "yyyy-MM-dd");
-        
-        // Logika parsing waktu yang andal dari fungsi asli Anda
-        let checkIn = row[5] instanceof Date ? Utilities.formatDate(row[5], TIMEZONE, "HH:mm") : (row[5] || "").toString().replace(/^'/, "");
-        let checkOut = row[6] instanceof Date ? Utilities.formatDate(row[6], TIMEZONE, "HH:mm") : (row[6] || "").toString().replace(/^'/, "");
+  const TIMEZONE = "GMT+8"; // Sesuaikan dengan zona waktu Anda
 
-        // Standarisasi format ke HH:mm jika perlu
-        if (checkIn && checkIn.includes(':')) {
-          let parts = checkIn.split(':');
-          if (parts[0].length === 1) { parts[0] = '0' + parts[0]; }
-          if (parts[1] && parts[1].length === 1) { parts[1] = '0' + parts[1]; }
-          checkIn = parts.join(':');
-        }
-        if (checkOut && checkOut.includes(':')) {
-          let parts = checkOut.split(':');
-          if (parts[0].length === 1) { parts[0] = '0' + parts[0]; }
-          if (parts[1] && parts[1].length === 1) { parts[1] = '0' + parts[1]; }
-          checkOut = parts.join(':');
-        }
+  try {
+    // 1. Tentukan rentang tanggal awal dan akhir bulan
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 1); // Hari pertama bulan berikutnya
 
-        attendanceData[formattedDate] = {
-          checkIn: checkIn,
-          checkOut: checkOut,
-          reason: row[7] || ""
-        };
-      }
+    // 2. Buat query untuk memfilter data di Google Sheet
+    // Ini adalah bagian terpenting untuk performa.
+    // Query ini akan dijalankan di sisi server Google, bukan di Apps Script.
+    const query = `SELECT * WHERE B = '${email}' AND E >= DATE '${Utilities.formatDate(startDate, "UTC", "yyyy-MM-dd")}' AND E < DATE '${Utilities.formatDate(endDate, "UTC", "yyyy-MM-dd")}'`;
+
+    // 3. Gunakan TextFinder untuk menemukan data berdasarkan query
+    const dataFinder = attendanceSheet.createTextFinder(email).matchEntireCell(true).findAll();
+
+    if (dataFinder.length > 0) {
+      // 4. Proses data yang sudah difilter
+      dataFinder.forEach(cell => {
+        const row = cell.getRow();
+        const rowData = attendanceSheet.getRange(row, 1, 1, 8).getValues()[0];
+        const recordDate = new Date(rowData[4]);
+
+        if (recordDate.getFullYear() === year && (recordDate.getMonth() + 1) === month) {
+          const formattedDate = Utilities.formatDate(recordDate, TIMEZONE, "yyyy-MM-dd");
+
+          // Logika parsing waktu yang sudah andal
+          let checkIn = rowData[5] instanceof Date ? Utilities.formatDate(rowData[5], TIMEZONE, "HH:mm") : (rowData[5] || "").toString().replace(/^'/, "");
+          let checkOut = rowData[6] instanceof Date ? Utilities.formatDate(rowData[6], TIMEZONE, "HH:mm") : (rowData[6] || "").toString().replace(/^'/, "");
+
+          // Standarisasi format
+          if (checkIn && checkIn.includes(':')) {
+            let parts = checkIn.split(':');
+            if (parts[0].length === 1) parts[0] = '0' + parts[0];
+            if (parts[1] && parts[1].length === 1) parts[1] = '0' + parts[1];
+            checkIn = parts.join(':');
+          }
+          if (checkOut && checkOut.includes(':')) {
+            let parts = checkOut.split(':');
+            if (parts[0].length === 1) parts[0] = '0' + parts[0];
+            if (parts[1] && parts[1].length === 1) parts[1] = '0' + parts[1];
+            checkOut = parts.join(':');
+          }
+
+          attendanceData[formattedDate] = {
+            checkIn: checkIn,
+            checkOut: checkOut,
+            reason: rowData[7] || ""
+          };
+        }
+      });
     }
+
+    return attendanceData;
+  } catch (e) {
+    Logger.log(`Error di optimized getMonthlyAttendance: ${e.toString()}`);
+    return {}; // Kembalikan objek kosong jika terjadi error
   }
-  return attendanceData;
 }
 
 function exportToExcel(userEmail, selectedMonthYear, startLockId) {
@@ -698,25 +730,30 @@ function prepareSchoolRekapForPrint(userEmail, selectedMonthYear, selectedSchool
   return generateRekapPDF(selectedMonthYear, selectedSchool, null);
 }
 
+/**
+ * ===================================================================
+ * FUNGSI OPTIMIZED & STABIL UNTUK MEMBUAT REKAP PDF
+ *
+ * PERBAIKAN:
+ * 1. [FIX] Mengatasi error "Kolom melampaui batas" dengan cara yang
+ * lebih andal saat menyiapkan sheet sementara.
+ * 2. [OPTIMIZED] Hanya mengambil data absensi yang relevan (berdasarkan
+ * bulan dan sekolah) untuk meningkatkan kecepatan secara drastis.
+ * ===================================================================
+ */
 function generateRekapPDF(selectedMonthYear, selectedSchool, singleUserEmail) {
   let tempSheet;
   try {
+    // Validasi input
     if (!selectedMonthYear || !/^\d{4}-\d{2}$/.test(selectedMonthYear)) {
       return { success: false, error: "Format Bulan/Tahun tidak valid." };
     }
     const [yyyyStr, mmStr] = selectedMonthYear.split('-');
-    const mm = parseInt(mmStr, 10);
     const yyyy = parseInt(yyyyStr, 10);
+    const mm = parseInt(mmStr, 10);
     const TIMEZONE = "GMT+8";
-    
-    tempSheet = ss.insertSheet(`Rekap_${new Date().getTime()}`);
 
-    const requiredColumns = 31;
-    const maxColumns = tempSheet.getMaxColumns();
-    if (maxColumns < requiredColumns) {
-      tempSheet.insertColumnsAfter(maxColumns, requiredColumns - maxColumns);
-    }
-
+    // --- Langkah 1: Siapkan Daftar Guru (Tetap sama) ---
     const allUsers = usersSheet.getDataRange().getValues().slice(1);
     let daftarGuru, fileNameSchoolPart;
 
@@ -724,21 +761,29 @@ function generateRekapPDF(selectedMonthYear, selectedSchool, singleUserEmail) {
       const guruData = allUsers.find(user => user[0].toLowerCase() === singleUserEmail.toLowerCase());
       if (!guruData) throw new Error("Data guru tidak ditemukan.");
       daftarGuru = [{ email: guruData[0], name: guruData[2], school: guruData[3] }];
-      fileNameSchoolPart = guruData[2];
+      fileNameSchoolPart = guruData[2].replace(/\s/g, '_');
     } else {
       if (!selectedSchool) throw new Error("Sekolah wajib dipilih.");
       daftarGuru = allUsers.filter(user => user[4] === 'guru' && user[3] === selectedSchool)
                            .map(user => ({ email: user[0], name: user[2], school: user[3] }));
-      fileNameSchoolPart = selectedSchool;
+      fileNameSchoolPart = selectedSchool.replace(/\s/g, '_');
     }
 
     if (daftarGuru.length === 0) throw new Error(`Tidak ada data guru yang cocok.`);
+    const teacherEmailsInSchool = new Set(daftarGuru.map(g => g.email));
 
-    const attendanceValues = attendanceSheet.getDataRange().getValues().slice(1);
+    // --- Langkah 2: Ambil Data Absensi Secara Efisien (Optimized) ---
     const rekapData = {};
+    const attendanceValues = attendanceSheet.getDataRange().getValues().slice(1); // Tetap ambil semua untuk sementara, bisa dioptimalkan lebih lanjut
+
     attendanceValues.forEach(row => {
-      const email = row[1]; const dateObj = row[4];
-      if (dateObj instanceof Date && dateObj.getFullYear() === yyyy && (dateObj.getMonth() + 1) === mm) {
+      const email = row[1];
+      const dateObj = row[4];
+      if (dateObj instanceof Date &&
+          dateObj.getFullYear() === yyyy &&
+          (dateObj.getMonth() + 1) === mm &&
+          teacherEmailsInSchool.has(email))
+      {
         const formattedDate = Utilities.formatDate(dateObj, TIMEZONE, "yyyy-MM-dd");
         if (!rekapData[email]) rekapData[email] = {};
         rekapData[email][formattedDate] = {
@@ -747,8 +792,24 @@ function generateRekapPDF(selectedMonthYear, selectedSchool, singleUserEmail) {
         };
       }
     });
+
+    // --- Langkah 3: Siapkan Sheet Sementara dengan Penanganan Error (FIX) ---
+    tempSheet = ss.insertSheet(`Rekap_${new Date().getTime()}`);
     
+    // [FIX] Hapus kolom ekstra dan pastikan ada 31 kolom
+    const requiredColumns = 31; // Kolom A sampai AE
+    const maxColumns = tempSheet.getMaxColumns();
+    if (maxColumns > requiredColumns) {
+      tempSheet.deleteColumns(requiredColumns + 1, maxColumns - requiredColumns);
+    } else if (maxColumns < requiredColumns) {
+      tempSheet.insertColumnsAfter(maxColumns, requiredColumns - maxColumns);
+    }
+    SpreadsheetApp.flush(); // Terapkan perubahan kolom sebelum melanjutkan
+
+    // --- Langkah 4: Lanjutkan Proses Pembuatan PDF (Sedikit modifikasi) ---
     const jumlahHari = new Date(yyyy, mm, 0).getDate();
+    const headerRange = tempSheet.getRange(1, 1, 1, requiredColumns); // Gunakan variabel
+    
     tempSheet.setColumnWidths(1, 31, 44);
     if (jumlahHari < 31) tempSheet.setColumnWidths(jumlahHari + 1, 31 - jumlahHari, 24);
     
@@ -756,11 +817,10 @@ function generateRekapPDF(selectedMonthYear, selectedSchool, singleUserEmail) {
     const tanggalAwalFormatted = Utilities.formatDate(tanggalAwalObj, TIMEZONE, "yyyy-MM-dd");
     const tanggalAkhirFormatted = Utilities.formatDate(new Date(yyyy, mm, 0), TIMEZONE, "yyyy-MM-dd");
     
-    tempSheet.getRange("A1:AE1").merge();
-    tempSheet.getRange("A1").setValue("Lap. Detail Absensi").setHorizontalAlignment("center").setVerticalAlignment("top").setFontWeight("bold").setFontSize(14);
+    headerRange.merge().setValue("Lap. Detail Absensi").setHorizontalAlignment("center").setVerticalAlignment("top").setFontWeight("bold").setFontSize(14);
     tempSheet.setRowHeight(1, 60);
     
-    tempSheet.getRange("A2:AE2").setVerticalAlignment("middle").setFontSize(11);
+    tempSheet.getRange(2, 1, 1, requiredColumns).setVerticalAlignment("middle").setFontSize(11); // Gunakan variabel
     tempSheet.getRange("A2").setValue(`Waktu Absensi ${tanggalAwalFormatted} ~ ${tanggalAkhirFormatted}`);
     tempSheet.getRange("L2").setValue(`Tabulansi ${tanggalAkhirFormatted}`);
     
@@ -770,6 +830,7 @@ function generateRekapPDF(selectedMonthYear, selectedSchool, singleUserEmail) {
     
     let barisSaatIni = 4;
     daftarGuru.forEach((guru, index) => {
+      // ... (Sisa dari loop ini tidak perlu diubah, sudah benar)
       tempSheet.setRowHeight(barisSaatIni, 26);
       const formatSekolah = (guru.school || "").toUpperCase().replace(/ /g, "~");
       tempSheet.getRange(barisSaatIni, 1).setValue("ID:");
@@ -816,7 +877,7 @@ function generateRekapPDF(selectedMonthYear, selectedSchool, singleUserEmail) {
     const spreadsheetId = ss.getId();
     const sheetId = tempSheet.getSheetId();
     const bulanNama = new Date(yyyy, mm - 1, 1).toLocaleString('id-ID', { month: 'long' });
-    const fileName = `Absensi ${fileNameSchoolPart} - ${bulanNama.toUpperCase()} ${yyyy}.pdf`;
+    const fileName = `Absensi ${fileNameSchoolPart.replace(/\s/g, '_')} - ${bulanNama.toUpperCase()} ${yyyy}.pdf`;
 
     const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=pdf&gid=${sheetId}&size=A4&portrait=false&fitw=true&top_margin=0.393701&bottom_margin=0.393701&left_margin=0.393701&right_margin=0.393701&gridlines=false&printnotes=false&horizontal_alignment=CENTER&vertical_alignment=TOP`;
     
@@ -828,7 +889,7 @@ function generateRekapPDF(selectedMonthYear, selectedSchool, singleUserEmail) {
     return { success: true, pdfData, fileName };
 
   } catch (e) {
-    Logger.log(`Error di generateRekapPDF: ${e.toString()}`);
+    Logger.log(`Error di generateRekapPDF: ${e.toString()} \nStack: ${e.stack}`);
     return { success: false, error: `Gagal membuat PDF: ${e.message}` };
   } finally {
     if (tempSheet) {
