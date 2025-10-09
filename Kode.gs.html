@@ -8,6 +8,7 @@
  * dalam satu sekolah.
  * - Dasbor staff dengan ringkasan tabel semua guru.
  * - Peringatan email otomatis untuk absensi yang belum lengkap.
+ * - Dukungan untuk guru yang mengajar di lebih dari satu sekolah.
  * ===================================================================
  */
 
@@ -59,20 +60,23 @@ function checkIfAdminOrStaff(email) {
   return false;
 }
 
-
+// [MODIFIED] Handles login for users who might be registered in multiple schools
 function userLogin(email, password) {
   try {
     const users = usersSheet.getDataRange().getValues();
+    const matchingUsers = [];
     for (let i = 1; i < users.length; i++) {
       if (users[i][0].toLowerCase() === email.toLowerCase() && users[i][1] == password && users[i][4]) { 
-        return { 
-          status: "success", 
+        matchingUsers.push({ 
           email: users[i][0],
           name: users[i][2], 
           school: users[i][3],
           role: users[i][4]
-        };
+        });
       }
+    }
+    if (matchingUsers.length > 0) {
+      return { status: "success", users: matchingUsers };
     }
     return { status: "failed", message: "Email, password salah, atau Anda tidak memiliki peran." };
   } catch(e) {
@@ -82,8 +86,9 @@ function userLogin(email, password) {
 
 // --- FUNGSI UNTUK TAMPILAN GURU & STAFF ---
 
-function getAppSettingsForUser(email, year, month) {
-  const attendanceData = getMonthlyAttendance(email, year, month);
+// [MODIFIED] Added 'school' parameter to fetch school-specific data
+function getAppSettingsForUser(email, school, year, month) {
+  const attendanceData = getMonthlyAttendance(email, school, year, month);
   let lockedMonths = [];
   try {
     const settingsData = settingsSheet.getDataRange().getValues();
@@ -126,6 +131,7 @@ function getAppSettingsForUser(email, year, month) {
   };
 }
 
+// [MODIFIED] Considers 'school' when saving attendance data
 function saveMonthlyAttendance(payload) {
   const { email, name, school, attendance } = payload;
   const sheet = attendanceSheet;
@@ -146,9 +152,10 @@ function saveMonthlyAttendance(payload) {
   for (let i = 1; i < allData.length; i++) {
     const row = allData[i];
     const recordEmail = row[1];
+    const recordSchool = row[3];
     const recordDate = row[4];
     
-    if (recordEmail === email && recordDate instanceof Date) {
+    if (recordEmail === email && recordSchool === school && recordDate instanceof Date) {
       if (recordDate.getFullYear() === payloadYear && (recordDate.getMonth() + 1) === payloadMonth) {
         const dateStr = Utilities.formatDate(recordDate, TIMEZONE, "yyyy-MM-dd");
         existingRecords[dateStr] = { 
@@ -223,79 +230,50 @@ function saveMonthlyAttendance(payload) {
   return { status: "success", message: "Absensi bulan ini berhasil diperbarui!" };
 }
 
-// GANTI FUNGSI LAMA DENGAN VERSI BARU INI DI Kode.gs
-
-/**
- * ===================================================================
- * FUNGSI OPTIMIZED UNTUK MENGAMBIL DATA KEHADIRAN BULANAN
- * Didesain untuk performa tinggi pada dataset besar (ratusan ribu baris).
- *
- * Strategi:
- * 1. Membuat "query" untuk memfilter data berdasarkan email dan rentang tanggal
- * sebelum menariknya ke dalam memori Apps Script.
- * 2. Menggunakan fungsionalitas SpreadsheetApp.openById() dan sheet.getRange()
- * untuk secara langsung menargetkan dan mengambil data yang relevan.
- * 3. Secara drastis mengurangi penggunaan memori dan waktu eksekusi.
- * ===================================================================
- */
-function getMonthlyAttendance(email, year, month) {
+// [MODIFIED] Added 'school' parameter to filter attendance records
+function getMonthlyAttendance(email, school, year, month) {
   const attendanceData = {};
-  const TIMEZONE = "GMT+8"; // Sesuaikan dengan zona waktu Anda
+  const TIMEZONE = "GMT+8"; 
 
   try {
-    // 1. Tentukan rentang tanggal awal dan akhir bulan
-    const startDate = new Date(year, month - 1, 1);
-    const endDate = new Date(year, month, 1); // Hari pertama bulan berikutnya
+    const allData = attendanceSheet.getDataRange().getValues();
 
-    // 2. Buat query untuk memfilter data di Google Sheet
-    // Ini adalah bagian terpenting untuk performa.
-    // Query ini akan dijalankan di sisi server Google, bukan di Apps Script.
-    const query = `SELECT * WHERE B = '${email}' AND E >= DATE '${Utilities.formatDate(startDate, "UTC", "yyyy-MM-dd")}' AND E < DATE '${Utilities.formatDate(endDate, "UTC", "yyyy-MM-dd")}'`;
-
-    // 3. Gunakan TextFinder untuk menemukan data berdasarkan query
-    const dataFinder = attendanceSheet.createTextFinder(email).matchEntireCell(true).findAll();
-
-    if (dataFinder.length > 0) {
-      // 4. Proses data yang sudah difilter
-      dataFinder.forEach(cell => {
-        const row = cell.getRow();
-        const rowData = attendanceSheet.getRange(row, 1, 1, 8).getValues()[0];
+    for (let i = 1; i < allData.length; i++) {
+        const rowData = allData[i];
+        const recordEmail = rowData[1];
+        const recordSchool = rowData[3];
         const recordDate = new Date(rowData[4]);
 
-        if (recordDate.getFullYear() === year && (recordDate.getMonth() + 1) === month) {
-          const formattedDate = Utilities.formatDate(recordDate, TIMEZONE, "yyyy-MM-dd");
+        if (recordEmail === email && recordSchool === school && recordDate.getFullYear() === year && (recordDate.getMonth() + 1) === month) {
+            const formattedDate = Utilities.formatDate(recordDate, TIMEZONE, "yyyy-MM-dd");
 
-          // Logika parsing waktu yang sudah andal
-          let checkIn = rowData[5] instanceof Date ? Utilities.formatDate(rowData[5], TIMEZONE, "HH:mm") : (rowData[5] || "").toString().replace(/^'/, "");
-          let checkOut = rowData[6] instanceof Date ? Utilities.formatDate(rowData[6], TIMEZONE, "HH:mm") : (rowData[6] || "").toString().replace(/^'/, "");
+            let checkIn = rowData[5] instanceof Date ? Utilities.formatDate(rowData[5], TIMEZONE, "HH:mm") : (rowData[5] || "").toString().replace(/^'/, "");
+            let checkOut = rowData[6] instanceof Date ? Utilities.formatDate(rowData[6], TIMEZONE, "HH:mm") : (rowData[6] || "").toString().replace(/^'/, "");
 
-          // Standarisasi format
-          if (checkIn && checkIn.includes(':')) {
-            let parts = checkIn.split(':');
-            if (parts[0].length === 1) parts[0] = '0' + parts[0];
-            if (parts[1] && parts[1].length === 1) parts[1] = '0' + parts[1];
-            checkIn = parts.join(':');
-          }
-          if (checkOut && checkOut.includes(':')) {
-            let parts = checkOut.split(':');
-            if (parts[0].length === 1) parts[0] = '0' + parts[0];
-            if (parts[1] && parts[1].length === 1) parts[1] = '0' + parts[1];
-            checkOut = parts.join(':');
-          }
+            if (checkIn && checkIn.includes(':')) {
+              let parts = checkIn.split(':');
+              if (parts[0].length === 1) parts[0] = '0' + parts[0];
+              if (parts[1] && parts[1].length === 1) parts[1] = '0' + parts[1];
+              checkIn = parts.join(':');
+            }
+            if (checkOut && checkOut.includes(':')) {
+              let parts = checkOut.split(':');
+              if (parts[0].length === 1) parts[0] = '0' + parts[0];
+              if (parts[1] && parts[1].length === 1) parts[1] = '0' + parts[1];
+              checkOut = parts.join(':');
+            }
 
-          attendanceData[formattedDate] = {
-            checkIn: checkIn,
-            checkOut: checkOut,
-            reason: rowData[7] || ""
-          };
+            attendanceData[formattedDate] = {
+              checkIn: checkIn,
+              checkOut: checkOut,
+              reason: rowData[7] || ""
+            };
         }
-      });
     }
-
     return attendanceData;
   } catch (e) {
-    Logger.log(`Error di optimized getMonthlyAttendance: ${e.toString()}`);
-    return {}; // Kembalikan objek kosong jika terjadi error
+    Logger.log(`Error di getMonthlyAttendance: ${e.toString()}`);
+    return {}; 
   }
 }
 
