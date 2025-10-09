@@ -24,6 +24,18 @@
         </div>
       </div>
 
+      <div id="school-selection-container" style="display:none;">
+         <div class="card">
+          <h2>Pilih Sekolah</h2>
+          <p>Anda terdaftar di beberapa sekolah. Silakan pilih sekolah untuk melanjutkan.</p>
+          <div class="input-group">
+            <label for="school-select">Sekolah</label>
+            <select id="school-select"></select>
+          </div>
+          <button id="school-select-button" onclick="handleSchoolSelection()">Lanjutkan</button>
+        </div>
+      </div>
+
       <div id="guru-dashboard-container" style="display:none;">
         <div class="card">
           <h2 id="guru-welcome-message"></h2>
@@ -314,7 +326,7 @@
         <div class="input-group"> <label for="user-email">Email</label> <input type="email" id="user-email"> </div>
         <div class="input-group"> <label for="user-password">Password</label> <input type="text" id="user-password"> </div>
         <div class="input-group"> <label for="user-name">Nama Lengkap</label> <input type="text" id="user-name"> </div>
-        <div class="input-group"> <label for="user-school">Sekolah</label> <input type="text" id="user-school"> </div>
+        <div class="input-group"> <label for="user-school">Sekolah (pisahkan dengan koma jika lebih dari satu)</label> <input type="text" id="user-school"> </div>
         <div class="input-group"> <label for="user-role">Peran</label> <select id="user-role"><option value="guru">Guru</option><option value="staff">Staff</option><option value="admin">Admin</option></select> </div>
         <button onclick="handleUserSave()">Simpan</button>
         <p id="user-form-message" class="message"></p>
@@ -326,10 +338,11 @@
       // VARIABEL GLOBAL
       // ===================================================================
       let currentUser = null;
+      let selectedSchool = null; // [NEW] To store the selected school for the session
       let currentDate = new Date();
       let appSettings = { lockedMonths: [], holidays: {}, announcements: "", teacherHolidays: [] };
-      let selectedTeacherForStaff = null; // Menyimpan data guru yang dipilih oleh staff
-      let schoolTeachers = []; // Menyimpan daftar guru satu sekolah
+      let selectedTeacherForStaff = null; 
+      let schoolTeachers = []; 
       const SPREADSHEET_ID = "1EIQY1DeGcwhEaYojbGMah-S5HbtsrON5YRy37bl_vLg";
 
       // ===================================================================
@@ -349,14 +362,19 @@
       // ===================================================================
       document.addEventListener('DOMContentLoaded', () => {
         const userSession = sessionStorage.getItem('ceklokUser');
+        const schoolSession = sessionStorage.getItem('ceklokSelectedSchool');
         if (userSession) {
           currentUser = JSON.parse(userSession);
-          if (currentUser.role === 'admin') {
-            showAdminDashboard(currentUser);
-          } else if (currentUser.role === 'staff') {
-            showStaffDashboard(currentUser);
-          } else {
-            showGuruDashboard(currentUser);
+          // Admin doesn't need a selected school, but others do.
+          if (currentUser.role === 'admin' || schoolSession) {
+            selectedSchool = schoolSession;
+            if (currentUser.role === 'admin') {
+              showAdminDashboard(currentUser);
+            } else if (currentUser.role === 'staff') {
+              showStaffDashboard(currentUser);
+            } else {
+              showGuruDashboard(currentUser);
+            }
           }
         }
         const emailInput = document.getElementById('email');
@@ -371,6 +389,7 @@
         passwordInput.addEventListener('keyup', loginOnEnter);
       });
       
+      // [MODIFIED] Login handler for multi-school support
       function handleLogin() {
         const email = document.getElementById("email").value;
         const password = document.getElementById("password").value;
@@ -383,20 +402,32 @@
         button.textContent = "Mencoba Login...";
         google.script.run
           .withSuccessHandler(response => {
+            button.disabled = false;
+            button.textContent = "Login";
             if (response.status === "success") {
-              sessionStorage.setItem('ceklokUser', JSON.stringify(response));
-              currentUser = response;
-              if (response.role === 'admin') {
-                showAdminDashboard(response);
-              } else if (response.role === 'staff') {
-                showStaffDashboard(response);
+              sessionStorage.setItem('ceklokUser', JSON.stringify(response.user));
+              currentUser = response.user;
+              
+              if (currentUser.role === 'admin') {
+                showAdminDashboard(currentUser);
+              } else if (currentUser.schools && currentUser.schools.length > 1) {
+                // If user has more than one school, show selection screen
+                showSchoolSelection(currentUser.schools);
+              } else if (currentUser.schools && currentUser.schools.length === 1) {
+                // If user has one school, proceed directly
+                selectedSchool = currentUser.schools[0];
+                sessionStorage.setItem('ceklokSelectedSchool', selectedSchool);
+                if (currentUser.role === 'staff') {
+                    showStaffDashboard(currentUser);
+                } else { // 'guru'
+                    showGuruDashboard(currentUser);
+                }
               } else {
-                showGuruDashboard(response);
+                // No schools assigned
+                displayMessage('login-message', 'Akun Anda tidak terdaftar di sekolah manapun.');
               }
             } else {
               displayMessage('login-message', response.message);
-              button.disabled = false;
-              button.textContent = "Login";
             }
           })
           .withFailureHandler(error => {
@@ -406,15 +437,46 @@
           })
           .userLogin(email, password);
       }
+      
+      // [NEW] Show school selection screen
+      function showSchoolSelection(schools) {
+        document.getElementById("login-container").style.display = "none";
+        const select = document.getElementById('school-select');
+        select.innerHTML = '';
+        schools.forEach(school => {
+            const option = document.createElement('option');
+            option.value = school;
+            option.textContent = school;
+            select.appendChild(option);
+        });
+        document.getElementById('school-selection-container').style.display = 'block';
+      }
+
+      // [NEW] Handle school selection and proceed to dashboard
+      function handleSchoolSelection() {
+        selectedSchool = document.getElementById('school-select').value;
+        if (selectedSchool) {
+          sessionStorage.setItem('ceklokSelectedSchool', selectedSchool);
+          document.getElementById('school-selection-container').style.display = 'none';
+          if (currentUser.role === 'staff') {
+            showStaffDashboard(currentUser);
+          } else {
+            showGuruDashboard(currentUser);
+          }
+        }
+      }
 
       function handleLogout() {
         sessionStorage.removeItem('ceklokUser');
+        sessionStorage.removeItem('ceklokSelectedSchool');
         currentUser = null;
+        selectedSchool = null;
         currentDate = new Date();
         selectedTeacherForStaff = null;
         schoolTeachers = [];
 
         document.getElementById("login-container").style.display = "block";
+        document.getElementById("school-selection-container").style.display = "none";
         document.getElementById("guru-dashboard-container").style.display = "none";
         document.getElementById("staff-dashboard-container").style.display = "none";
         document.getElementById("ceklok-container").style.display = "none";
@@ -442,9 +504,11 @@
       // ===================================================================
       // LOGIKA UNTUK GURU
       // ===================================================================
+      // [MODIFIED] Pass selectedSchool to backend calls and update UI
       function showGuruDashboard(userData) {
           if (userData) currentUser = userData;
           document.getElementById("login-container").style.display = "none";
+          document.getElementById("school-selection-container").style.display = "none";
           document.getElementById("staff-dashboard-container").style.display = "none";
           document.getElementById("ceklok-container").style.display = "none";
           document.getElementById("admin-container").style.display = "none";
@@ -452,11 +516,12 @@
           document.getElementById("emis-import-container").style.display = "none";
           document.getElementById("emis-export-container").style.display = "none";
           document.getElementById("guru-dashboard-container").style.display = "block";
-          document.getElementById("guru-welcome-message").innerHTML = `Halo, <strong>${currentUser.name}</strong><br><small>${currentUser.school}</small>`;
+          document.getElementById("guru-welcome-message").innerHTML = `Halo, <strong>${currentUser.name}</strong><br><small>${selectedSchool}</small>`;
           
           google.script.run.withSuccessHandler(response => {
               renderAnnouncements(response.announcements);
-          }).getAppSettingsForUser(currentUser.email, currentDate.getFullYear(), currentDate.getMonth() + 1);
+              appSettings = response; // Store settings
+          }).getAppSettingsForUser(currentUser.email, selectedSchool, currentDate.getFullYear(), currentDate.getMonth() + 1);
 
           loadAndRenderSummary();
       }
@@ -467,7 +532,7 @@
         document.getElementById("emis-export-container").style.display = "none";
         document.getElementById("teacher-holiday-settings-container").style.display = "none";
         document.getElementById("ceklok-container").style.display = "block";
-        document.getElementById('ceklok-teacher-name').innerText = ''; // Kosongkan nama guru
+        document.getElementById('ceklok-teacher-name').innerText = ''; 
         loadMonthData(currentDate);
       }
 
@@ -509,24 +574,22 @@
         loadMonthData(currentDate);
       }
 
+      // [MODIFIED] Use selectedSchool in backend call
       function loadMonthData(date){
          const year = date.getFullYear();
          const month = date.getMonth() + 1;
          const userEmail = (currentUser.role === 'staff' && selectedTeacherForStaff) ? selectedTeacherForStaff.email : currentUser.email;
+         // For staff, use the teacher's school; for guru, use the session's selected school
+         const schoolForCall = (currentUser.role === 'staff' && selectedTeacherForStaff) ? selectedTeacherForStaff.school : selectedSchool;
 
          document.getElementById('month-display').innerText = date.toLocaleString('id-ID', { month: 'long', year: 'numeric' });
          document.getElementById('attendance-table-container').innerHTML = '<div>Memuat data...</div>';
          google.script.run
           .withSuccessHandler(response => {
-            appSettings = {
-              lockedMonths: response.lockedMonths || [],
-              holidays: response.holidays || {},
-              announcements: response.announcements || "",
-              teacherHolidays: response.teacherHolidays || []
-            };
+            appSettings = response;
             generateMonthTable(year, month, response.attendance);
           })
-          .getAppSettingsForUser(userEmail, year, month);
+          .getAppSettingsForUser(userEmail, schoolForCall, year, month);
       }
 
       function generateMonthTable(year, month, attendanceData) {
@@ -613,14 +676,16 @@
         if (reasonSelect) reasonSelect.value = '';
       }
       
+      // [MODIFIED] Ensure payload includes the correct school
       function handleSave() {
           const button = document.getElementById('save-button');
           document.querySelectorAll('#attendance-table-container tr.invalid-row').forEach(row => {
               row.classList.remove('invalid-row');
           });
           
+          const schoolForSave = (currentUser.role === 'staff' && selectedTeacherForStaff) ? selectedTeacherForStaff.school : selectedSchool;
           const targetUser = (currentUser.role === 'staff' && selectedTeacherForStaff) ? selectedTeacherForStaff : currentUser;
-          const payload = { email: targetUser.email, name: targetUser.name, school: targetUser.school, attendance: {} };
+          const payload = { email: targetUser.email, name: targetUser.name, school: schoolForSave, attendance: {} };
           
           const rows = document.querySelectorAll('#attendance-table-container tbody tr');
           let validationError = false;
@@ -697,6 +762,7 @@
               .saveMonthlyAttendance(payload);
       }
 
+      // [MODIFIED] Use selectedSchool for summary
       function loadAndRenderSummary(year, month) {
           const targetDate = (year && month) ? new Date(year, month - 1) : new Date();
           const targetYear = targetDate.getFullYear();
@@ -723,7 +789,7 @@
                   console.error("Error server saat memuat ringkasan:", error.message);
                   summaryValues.forEach(el => el.innerText = '-');
               })
-              .getAttendanceSummary(currentUser.email, targetYear, targetMonth);
+              .getAttendanceSummary(currentUser.email, selectedSchool, targetYear, targetMonth);
       }
 
       function handleSummaryMonthChange() {
@@ -806,6 +872,7 @@
               .saveTeacherHolidays(currentUser.email, settings);
       }
 
+      // [MODIFIED] Pass school to import function
       function handleEmisImport() {
           const fileInput = document.getElementById('emis-file-input');
           const file = fileInput.files[0];
@@ -818,6 +885,7 @@
           button.textContent = 'Mengimpor...';
           displayMessage('emis-import-message', 'Sedang mengunggah dan memproses file...', true);
           
+          const schoolForImport = (currentUser.role === 'staff' && selectedTeacherForStaff) ? selectedTeacherForStaff.school : selectedSchool;
           const targetEmail = (currentUser.role === 'staff' && selectedTeacherForStaff) ? selectedTeacherForStaff.email : currentUser.email;
 
           const reader = new FileReader();
@@ -850,15 +918,17 @@
                       button.disabled = false;
                       button.textContent = 'Proses Import';
                   })
-                  .importFromEmis(targetEmail, fileData);
+                  .importFromEmis(targetEmail, schoolForImport, fileData);
           };
           reader.readAsDataURL(file);
       }
 
+      // [MODIFIED] Pass school to export function
       function handleEmisExport() {
         const monthInput = document.getElementById('emis-export-month').value;
         const lockIdInput = document.getElementById('lock-id-input').value;
         const button = document.getElementById('export-emis-button');
+        const schoolForExport = (currentUser.role === 'staff' && selectedTeacherForStaff) ? selectedTeacherForStaff.school : selectedSchool;
         const targetEmail = (currentUser.role === 'staff' && selectedTeacherForStaff) ? selectedTeacherForStaff.email : currentUser.email;
 
         if (!monthInput) {
@@ -895,7 +965,7 @@
             button.disabled = false;
             button.textContent = 'Download Template';
           })
-          .exportToExcel(targetEmail, monthInput, lockIdInput);
+          .exportToExcel(targetEmail, schoolForExport, monthInput, lockIdInput);
       }
       
       // ===================================================================
@@ -907,15 +977,14 @@
           document.getElementById("guru-dashboard-container").style.display = "none";
           document.getElementById("ceklok-container").style.display = "none";
           document.getElementById("admin-container").style.display = "none";
+          document.getElementById("school-selection-container").style.display = "none";
           
-          // --- TAMBAHAN KODE PERBAIKAN DI BAWAH INI ---
           document.getElementById("teacher-holiday-settings-container").style.display = "none";
           document.getElementById("emis-import-container").style.display = "none";
           document.getElementById("emis-export-container").style.display = "none";
-          // --- AKHIR DARI KODE PERBAIKAN ---
 
           document.getElementById("staff-dashboard-container").style.display = "block";
-          document.getElementById("staff-welcome-message").innerHTML = `Halo Staff, <strong>${currentUser.name}</strong><br><small>${currentUser.school}</small>`;
+          document.getElementById("staff-welcome-message").innerHTML = `Halo Staff, <strong>${currentUser.name}</strong><br><small>${selectedSchool}</small>`;
           
           loadSchoolTeachers();
           loadStaffSummary();
@@ -923,7 +992,7 @@
           google.script.run.withSuccessHandler(response => {
             const p = document.getElementById('staff-announcement-text');
             p.innerText = (response.announcements && response.announcements.trim() !== "") ? response.announcements : "Tidak ada pengumuman saat ini.";
-          }).getAppSettingsForUser(currentUser.email, currentDate.getFullYear(), currentDate.getMonth() + 1);
+          }).getAppSettingsForUser(currentUser.email, selectedSchool, currentDate.getFullYear(), currentDate.getMonth() + 1);
       }
 
       function loadSchoolTeachers() {
@@ -1000,14 +1069,14 @@
       }
 
       function showCeklokPageForStaff(isRedirect = false) {
-          if (!isRedirect) { // Hanya pilih guru jika bukan redirect dari import
+          if (!isRedirect) { 
               selectedTeacherForStaff = getSelectedTeacher('staff-teacher-select-ceklok');
           }
           if (!selectedTeacherForStaff) return;
           
           document.getElementById("staff-dashboard-container").style.display = "none";
           document.getElementById("ceklok-container").style.display = "block";
-          document.getElementById('ceklok-teacher-name').innerText = `Untuk: ${selectedTeacherForStaff.name}`;
+          document.getElementById('ceklok-teacher-name').innerText = `Untuk: ${selectedTeacherForStaff.name} (${selectedTeacherForStaff.school})`;
           loadMonthData(currentDate);
       }
       
@@ -1017,7 +1086,7 @@
           
           document.getElementById("staff-dashboard-container").style.display = "none";
           document.getElementById("emis-import-container").style.display = "block";
-          document.getElementById('emis-import-teacher-name').innerText = `Untuk: ${selectedTeacherForStaff.name}`;
+          document.getElementById('emis-import-teacher-name').innerText = `Untuk: ${selectedTeacherForStaff.name} (${selectedTeacherForStaff.school})`;
       }
       
       function showEmisExportPageForStaff() {
@@ -1026,7 +1095,7 @@
 
           document.getElementById("staff-dashboard-container").style.display = "none";
           document.getElementById("emis-export-container").style.display = "block";
-          document.getElementById('emis-export-teacher-name').innerText = `Untuk: ${selectedTeacherForStaff.name}`;
+          document.getElementById('emis-export-teacher-name').innerText = `Untuk: ${selectedTeacherForStaff.name} (${selectedTeacherForStaff.school})`;
       }
 
       function handleStaffDownloadAllRekap() {
@@ -1034,11 +1103,6 @@
           const button = document.getElementById('staff-download-all-rekap-button');
           if (!monthInput) {
               displayMessage('staff-rekap-all-message', 'Silakan pilih bulan dan tahun terlebih dahulu.');
-              return;
-          }
-          const userSchool = currentUser.school;
-          if (!userSchool) {
-              displayMessage('staff-rekap-all-message', 'Informasi sekolah Anda tidak ditemukan.');
               return;
           }
           button.disabled = true;
@@ -1065,7 +1129,7 @@
                   button.disabled = false;
                   button.textContent = 'Unduh Rekap Semua Guru';
               })
-              .prepareSchoolRekapForPrint(currentUser.email, monthInput, userSchool);
+              .prepareSchoolRekapForPrint(currentUser.email, monthInput, selectedSchool);
       }
 
 
@@ -1078,6 +1142,7 @@
         document.getElementById("guru-dashboard-container").style.display = "none";
         document.getElementById("staff-dashboard-container").style.display = "none";
         document.getElementById("ceklok-container").style.display = "none";
+        document.getElementById("school-selection-container").style.display = "none";
         document.getElementById("admin-container").style.display = "block";
         document.getElementById("admin-welcome-message").innerHTML = `Halo Admin, <strong>${currentUser.name}</strong>`;
         loadUsers();
@@ -1267,6 +1332,7 @@
         evt.currentTarget.className += " active";
       }
 
+      // [MODIFIED] Pass selectedSchool to rekap function
       function handleGuruDownloadRekap() {
           const monthInput = document.getElementById('guru-rekap-month').value;
           const button = document.getElementById('guru-download-rekap-button');
@@ -1298,9 +1364,10 @@
                   button.disabled = false;
                   button.textContent = 'Buat & Unduh Rekap Saya';
               })
-              .prepareMyRekapForPrint(currentUser.email, monthInput);
+              .prepareMyRekapForPrint(currentUser.email, selectedSchool, monthInput);
       }
-
+      
+      // [MODIFIED] Pass selectedSchool to rekap function
       function handleGuruDownloadAllRekap() {
           const monthInput = document.getElementById('guru-rekap-month').value; 
           const button = document.getElementById('guru-download-all-rekap-button');
@@ -1308,8 +1375,7 @@
               displayMessage('guru-rekap-all-message', 'Silakan pilih bulan dan tahun di atas terlebih dahulu.');
               return;
           }
-          const userSchool = currentUser.school;
-          if (!userSchool) {
+          if (!selectedSchool) {
               displayMessage('guru-rekap-all-message', 'Informasi sekolah Anda tidak ditemukan.');
               return;
           }
@@ -1337,7 +1403,7 @@
                   button.disabled = false;
                   button.textContent = 'Unduh Rekap Semua Guru (Satu Sekolah)';
               })
-              .prepareSchoolRekapForPrint(currentUser.email, monthInput, userSchool);
+              .prepareSchoolRekapForPrint(currentUser.email, monthInput, selectedSchool);
       }
     </script>
   </body>
