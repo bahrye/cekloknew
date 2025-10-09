@@ -907,6 +907,13 @@
           document.getElementById("guru-dashboard-container").style.display = "none";
           document.getElementById("ceklok-container").style.display = "none";
           document.getElementById("admin-container").style.display = "none";
+          
+          // --- TAMBAHAN KODE PERBAIKAN DI BAWAH INI ---
+          document.getElementById("teacher-holiday-settings-container").style.display = "none";
+          document.getElementById("emis-import-container").style.display = "none";
+          document.getElementById("emis-export-container").style.display = "none";
+          // --- AKHIR DARI KODE PERBAIKAN ---
+
           document.getElementById("staff-dashboard-container").style.display = "block";
           document.getElementById("staff-welcome-message").innerHTML = `Halo Staff, <strong>${currentUser.name}</strong><br><small>${currentUser.school}</small>`;
           
