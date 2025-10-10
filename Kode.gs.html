@@ -116,7 +116,7 @@ function getAppSettingsForUser(email, school, year, month) {
   } catch (e) {}
   
   const today = new Date();
-  if (today.getDate() > 10) {
+  if (today.getDate() > 7) {
     const lastMonthDate = new Date();
     lastMonthDate.setMonth(lastMonthDate.getMonth() - 1);
     const lastMonthStr = `${lastMonthDate.getFullYear()}-${String(lastMonthDate.getMonth() + 1).padStart(2, '0')}`;
