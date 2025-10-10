@@ -39,6 +39,7 @@
       <div id="guru-dashboard-container" style="display:none;">
         <div class="card">
           <h2 id="guru-welcome-message"></h2>
+          
           <div id="announcement-section">
             <h3>Pengumuman</h3>
             <p id="announcement-text">Tidak ada pengumuman saat ini.</p>
@@ -197,7 +198,7 @@
       <div id="ceklok-container" style="display:none;">
         <div class="card">
           <button class="back-button" onclick="goBackToDashboard()">&larr; Kembali ke Dasbor</button>
-          <h2 style="margin-top: 15px;">Formulir Kehadiran</h2>
+          <h2 style="margin-top: 15px;" id="ceklok-title">Formulir Kehadiran</h2>
           <h3 id="ceklok-teacher-name" style="margin-top: -10px; margin-bottom: 15px; font-weight: 500; color: var(--text-secondary-color);"></h3>
           <div id="global-lock-message" class="message" style="color: #b91c1c; margin-bottom: 15px;"></div>
           <div class="month-navigator">
@@ -212,21 +213,21 @@
       </div>
       
       <div id="teacher-holiday-settings-container" style="display:none;">
-        <div class="card">
-            <button class="back-button" onclick="goBackToDashboard()">&larr; Kembali ke Dasbor</button>
-            <h2 style="margin-top: 15px;">Pengaturan Hari Libur Mengajar</h2>
-            <p>Pilih hari di mana Anda tidak ada jadwal mengajar. Hari yang dipilih akan otomatis ditandai sebagai "Hari Libur Sekolah" pada halaman absensi.</p>
-            <div id="holiday-switches-container">
-            </div>
-            <button id="save-teacher-holidays-button" onclick="handleSaveTeacherHolidays()">Simpan Pengaturan</button>
-            <p id="teacher-holidays-message" class="message"></p>
-        </div>
+          <div class="card">
+              <button class="back-button" onclick="goBackToDashboard()">&larr; Kembali ke Dasbor</button>
+              <h2 style="margin-top: 15px;" id="teacher-holiday-title">Pengaturan Hari Libur Mengajar</h2>
+              <p>Pilih hari di mana Anda tidak ada jadwal mengajar. Hari yang dipilih akan otomatis ditandai sebagai "Hari Libur Sekolah" pada halaman absensi.</p>
+              <div id="holiday-switches-container">
+              </div>
+              <button id="save-teacher-holidays-button" onclick="handleSaveTeacherHolidays()">Simpan Pengaturan</button>
+              <p id="teacher-holidays-message" class="message"></p>
+          </div>
       </div>
       
       <div id="emis-import-container" style="display:none;">
         <div class="card">
           <button class="back-button" onclick="goBackToDashboard()">&larr; Kembali ke Dasbor</button>
-          <h2 style="margin-top: 15px;">Import Data Kehadiran EMIS</h2>
+          <h2 style="margin-top: 15px;" id="emis-import-title">Import Data Kehadiran EMIS</h2>
           <h3 id="emis-import-teacher-name" style="margin-top: -10px; margin-bottom: 15px; font-weight: 500; color: var(--text-secondary-color);"></h3>
           <p>Pilih file Excel (.xlsx, .xls) yang berisi data kehadiran. Pastikan file adalah hasil download dari <strong>Aplikasi EMIS</strong>.</p>
           <div class="input-group">
@@ -241,7 +242,7 @@
       <div id="emis-export-container" style="display:none;">
         <div class="card">
           <button class="back-button" onclick="goBackToDashboard()">&larr; Kembali ke Dasbor</button>
-          <h2 style="margin-top: 15px;">Eksport Data Kehadiran</h2>
+          <h2 style="margin-top: 15px;" id="emis-export-title">Eksport Data Kehadiran</h2>
           <h3 id="emis-export-teacher-name" style="margin-top: -10px; margin-bottom: 15px; font-weight: 500; color: var(--text-secondary-color);"></h3>
           <p>Fitur ini akan membuat file Excel (.xlsx) berisi data kehadiran Anda untuk bulan yang dipilih, lengkap dengan LOCK ID yang berurutan. Akan diupload ke <strong>Aplikasi EMIS</strong>.</p>
           <div class="input-group">
@@ -319,7 +320,7 @@
     </div>
     
     <div id="user-form-modal" class="modal">
-         <div class="modal-content">
+      <div class="modal-content">
         <span class="close-btn" onclick="closeUserForm()">&times;</span>
         <h3 id="form-title">Tambah Akun Baru</h3>
         <input type="hidden" id="original-email">
@@ -332,13 +333,22 @@
         <p id="user-form-message" class="message"></p>
       </div>
     </div>
+
+    <div id="school-switcher-modal" class="modal">
+      <div class="modal-content">
+        <span class="close-btn" onclick="closeSchoolSwitcherModal()">&times;</span>
+        <h3 style="margin-top:0;">Pilih Sekolah</h3>
+        <div id="school-list-container">
+        </div>
+      </div>
+    </div>
     
     <script>
       // ===================================================================
       // VARIABEL GLOBAL
       // ===================================================================
       let currentUser = null;
-      let selectedSchool = null; // [NEW] To store the selected school for the session
+      let selectedSchool = null;
       let currentDate = new Date();
       let appSettings = { lockedMonths: [], holidays: {}, announcements: "", teacherHolidays: [] };
       let selectedTeacherForStaff = null; 
@@ -365,7 +375,6 @@
         const schoolSession = sessionStorage.getItem('ceklokSelectedSchool');
         if (userSession) {
           currentUser = JSON.parse(userSession);
-          // Admin doesn't need a selected school, but others do.
           if (currentUser.role === 'admin' || schoolSession) {
             selectedSchool = schoolSession;
             if (currentUser.role === 'admin') {
@@ -389,7 +398,6 @@
         passwordInput.addEventListener('keyup', loginOnEnter);
       });
       
-      // [MODIFIED] Login handler for multi-school support
       function handleLogin() {
         const email = document.getElementById("email").value;
         const password = document.getElementById("password").value;
@@ -411,19 +419,16 @@
               if (currentUser.role === 'admin') {
                 showAdminDashboard(currentUser);
               } else if (currentUser.schools && currentUser.schools.length > 1) {
-                // If user has more than one school, show selection screen
                 showSchoolSelection(currentUser.schools);
               } else if (currentUser.schools && currentUser.schools.length === 1) {
-                // If user has one school, proceed directly
                 selectedSchool = currentUser.schools[0];
                 sessionStorage.setItem('ceklokSelectedSchool', selectedSchool);
                 if (currentUser.role === 'staff') {
                     showStaffDashboard(currentUser);
-                } else { // 'guru'
+                } else {
                     showGuruDashboard(currentUser);
                 }
               } else {
-                // No schools assigned
                 displayMessage('login-message', 'Akun Anda tidak terdaftar di sekolah manapun.');
               }
             } else {
@@ -438,7 +443,6 @@
           .userLogin(email, password);
       }
       
-      // [NEW] Show school selection screen
       function showSchoolSelection(schools) {
         document.getElementById("login-container").style.display = "none";
         const select = document.getElementById('school-select');
@@ -452,7 +456,6 @@
         document.getElementById('school-selection-container').style.display = 'block';
       }
 
-      // [NEW] Handle school selection and proceed to dashboard
       function handleSchoolSelection() {
         selectedSchool = document.getElementById('school-select').value;
         if (selectedSchool) {
@@ -504,7 +507,6 @@
       // ===================================================================
       // LOGIKA UNTUK GURU
       // ===================================================================
-      // [MODIFIED] Pass selectedSchool to backend calls and update UI
       function showGuruDashboard(userData) {
           if (userData) currentUser = userData;
           document.getElementById("login-container").style.display = "none";
@@ -516,52 +518,86 @@
           document.getElementById("emis-import-container").style.display = "none";
           document.getElementById("emis-export-container").style.display = "none";
           document.getElementById("guru-dashboard-container").style.display = "block";
-          document.getElementById("guru-welcome-message").innerHTML = `Halo, <strong>${currentUser.name}</strong><br><small>${selectedSchool}</small>`;
           
+          const welcomeH2 = document.getElementById('guru-welcome-message');
+          let welcomeHTML = `Halo, <strong>${currentUser.name}</strong>`;
+
+          if (currentUser.schools && currentUser.schools.length > 1) {
+            welcomeHTML += `<br><small id="school-switcher-link" onclick="openSchoolSwitcherModal()">${selectedSchool}</small>`;
+          } else {
+            welcomeHTML += `<br><small>${selectedSchool}</small>`;
+          }
+          welcomeH2.innerHTML = welcomeHTML;
+
           google.script.run.withSuccessHandler(response => {
               renderAnnouncements(response.announcements);
-              appSettings = response; // Store settings
+              appSettings = response;
           }).getAppSettingsForUser(currentUser.email, selectedSchool, currentDate.getFullYear(), currentDate.getMonth() + 1);
 
           loadAndRenderSummary();
       }
       
+      function openSchoolSwitcherModal() {
+        const modal = document.getElementById('school-switcher-modal');
+        const container = document.getElementById('school-list-container');
+        container.innerHTML = '';
+
+        currentUser.schools.forEach(school => {
+          const schoolButton = document.createElement('button');
+          schoolButton.textContent = school;
+          schoolButton.onclick = () => handleSchoolSwitch(school);
+          if (school === selectedSchool) {
+            schoolButton.disabled = true;
+          }
+          container.appendChild(schoolButton);
+        });
+        modal.style.display = 'block';
+      }
+
+      function closeSchoolSwitcherModal() {
+        document.getElementById('school-switcher-modal').style.display = 'none';
+      }
+
+      function handleSchoolSwitch(newSchool) {
+        closeSchoolSwitcherModal();
+        if (newSchool && newSchool !== selectedSchool) {
+          selectedSchool = newSchool;
+          sessionStorage.setItem('ceklokSelectedSchool', selectedSchool);
+          showGuruDashboard(); 
+        }
+      }
+
       function showCeklokPage() {
         document.getElementById("guru-dashboard-container").style.display = "none";
-        document.getElementById("emis-import-container").style.display = "none";
-        document.getElementById("emis-export-container").style.display = "none";
-        document.getElementById("teacher-holiday-settings-container").style.display = "none";
         document.getElementById("ceklok-container").style.display = "block";
         document.getElementById('ceklok-teacher-name').innerText = ''; 
+        document.getElementById('ceklok-title').innerText = `Formulir Kehadiran - ${selectedSchool}`;
         loadMonthData(currentDate);
       }
 
       function showTeacherHolidaySettings() {
-        document.getElementById("guru-dashboard-container").style.display = "none";
-        document.getElementById("ceklok-container").style.display = "none";
-        document.getElementById("emis-import-container").style.display = "none";
-        document.getElementById("emis-export-container").style.display = "none";
-        document.getElementById("teacher-holiday-settings-container").style.display = "block";
-        renderTeacherHolidaySwitches();
-        loadTeacherHolidays();
+          document.getElementById("guru-dashboard-container").style.display = "none";
+          document.getElementById("ceklok-container").style.display = "none";
+          document.getElementById("emis-import-container").style.display = "none";
+          document.getElementById("emis-export-container").style.display = "none";
+          document.getElementById("teacher-holiday-settings-container").style.display = "block";
+          document.getElementById('teacher-holiday-title').innerText = `Pengaturan Hari Libur - ${selectedSchool}`;
+          renderTeacherHolidaySwitches();
+          loadTeacherHolidays();
       }
 
       function showEmisImportPage() {
         document.getElementById("guru-dashboard-container").style.display = "none";
-        document.getElementById("ceklok-container").style.display = "none";
-        document.getElementById("teacher-holiday-settings-container").style.display = "none";
-        document.getElementById("emis-export-container").style.display = "none";
         document.getElementById("emis-import-container").style.display = "block";
         document.getElementById('emis-import-teacher-name').innerText = '';
+        document.getElementById('emis-import-title').innerText = `Import Data Kehadiran EMIS - ${selectedSchool}`;
       }
 
       function showEmisExportPage() {
         document.getElementById("guru-dashboard-container").style.display = "none";
-        document.getElementById("ceklok-container").style.display = "none";
-        document.getElementById("teacher-holiday-settings-container").style.display = "none";
-        document.getElementById("emis-import-container").style.display = "none";
         document.getElementById("emis-export-container").style.display = "block";
         document.getElementById('emis-export-teacher-name').innerText = '';
+        document.getElementById('emis-export-title').innerText = `Eksport Data Kehadiran - ${selectedSchool}`;
       }
       
       function renderAnnouncements(text) {
@@ -574,12 +610,10 @@
         loadMonthData(currentDate);
       }
 
-      // [MODIFIED] Use selectedSchool in backend call
       function loadMonthData(date){
          const year = date.getFullYear();
          const month = date.getMonth() + 1;
          const userEmail = (currentUser.role === 'staff' && selectedTeacherForStaff) ? selectedTeacherForStaff.email : currentUser.email;
-         // For staff, use the teacher's school; for guru, use the session's selected school
          const schoolForCall = (currentUser.role === 'staff' && selectedTeacherForStaff) ? selectedTeacherForStaff.school : selectedSchool;
 
          document.getElementById('month-display').innerText = date.toLocaleString('id-ID', { month: 'long', year: 'numeric' });
@@ -593,47 +627,88 @@
       }
 
       function generateMonthTable(year, month, attendanceData) {
-        const container = document.getElementById('attendance-table-container');
-        const daysInMonth = new Date(year, month, 0).getDate();
-        const currentMonthStr = `${year}-${String(month).padStart(2, '0')}`;
-        const isMonthLocked = appSettings.lockedMonths.includes(currentMonthStr);
-        const today = new Date();
-        const currentYear = today.getFullYear();
-        const currentMonth = today.getMonth() + 1;
-        const isFutureMonth = year > currentYear || (year === currentYear && month > currentMonth);
-        let lockMessage = "";
-        if(isMonthLocked) lockMessage = 'Absensi untuk bulan ini telah dikunci.';
-        else if (isFutureMonth) lockMessage = 'Anda belum bisa mengisi absensi untuk bulan depan.';
-        document.getElementById('global-lock-message').innerText = lockMessage;
-        document.getElementById('save-button').disabled = isMonthLocked || isFutureMonth;
-        let tableHTML = '<table><thead><tr><th>Tanggal</th><th>Jam Masuk</th><th>Jam Pulang</th><th>Keterangan</th><th>Aksi</th></tr></thead><tbody>';
-        
-        for (let day = 1; day <= daysInMonth; day++) {
-          const dateStr = `${currentMonthStr}-${String(day).padStart(2, '0')}`;
-          const dateObj = new Date(year, month - 1, day);
-          const dayOfWeek = dateObj.getDay();
-          const dayName = dateObj.toLocaleString('id-ID', { weekday: 'short' });
-          const isSunday = dayOfWeek === 0;
-          const isHoliday = !!appSettings.holidays[dateStr];
-          const isTeacherHoliday = appSettings.teacherHolidays[dayOfWeek - 1] && dayOfWeek !== 0; 
-          const existingData = attendanceData[dateStr];
+          const container = document.getElementById('attendance-table-container');
+
+          const reasonOptions = `
+              <option value="">-- Pilih Alasan --</option>
+              <option value="Hari Libur Sekolah">Hari Libur Sekolah</option>
+              <option value="Cuti Tahunan">Cuti Tahunan</option>
+              <option value="Cuti Bersalin (Anak Pertama s.d Ketiga)">Cuti Bersalin (Anak Pertama s.d Ketiga)</option>
+              <option value="Cuti Bersalin (Anak Keempat dst) Bulan Pertama">Cuti Bersalin (Anak Keempat dst) Bulan Pertama</option>
+              <option value="Cuti Bersalin (Anak Keempat dst) Bulan Kedua">Cuti Bersalin (Anak Keempat dst) Bulan Kedua</option>
+              <option value="Cuti Bersalin (Anak Keempat dst) Bulan Ketiga">Cuti Bersalin (Anak Keempat dst) Bulan Ketiga</option>
+              <option value="Cuti Besar Bulan Pertama">Cuti Besar Bulan Pertama</option>
+              <option value="Cuti Besar Bulan Kedua">Cuti Besar Bulan Kedua</option>
+              <option value="Cuti Besar Bulan Ketiga">Cuti Besar Bulan Ketiga</option>
+              <option value="Izin Tugas belajar">Izin Tugas belajar</option>
+              <option value="Izin Alasan Penting (1 s.d 2 Hari)">Izin Alasan Penting (1 s.d 2 Hari)</option>
+              <option value="Izin Alasan Penting (Lebih dari 2 Hari)">Izin Alasan Penting (Lebih dari 2 Hari)</option>
+              <option value="Izin Sakit (1 hari Sampai Dengan 14 Hari)">Izin Sakit (1 hari Sampai Dengan 14 Hari)</option>
+              <option value="Izin Sakit (Lebih dari 14 Hari Sampai Dengan 12 Bulan)">Izin Sakit (Lebih dari 14 Hari Sampai Dengan 12 Bulan)</option>
+              <option value="Izin Sakit (Lebih dari 12 Bulan Sampai Dengan 18 Bulan)">Izin Sakit (Lebih dari 12 Bulan Sampai Dengan 18 Bulan)</option>
+              <option value="Dinas Luar">Dinas Luar</option>
+          `;
+
+          const teacherHolidayReasonOptions = `
+              <option value="Hari Libur Sekolah" selected>Hari Libur Sekolah</option>
+              <option value="">-- Pilih Alasan Lain --</option>
+              <option value="Cuti Tahunan">Cuti Tahunan</option>
+              <option value="Cuti Bersalin (Anak Pertama s.d Ketiga)">Cuti Bersalin (Anak Pertama s.d Ketiga)</option>
+              <option value="Cuti Bersalin (Anak Keempat dst) Bulan Pertama">Cuti Bersalin (Anak Keempat dst) Bulan Pertama</option>
+              <option value="Cuti Bersalin (Anak Keempat dst) Bulan Kedua">Cuti Bersalin (Anak Keempat dst) Bulan Kedua</option>
+              <option value="Cuti Bersalin (Anak Keempat dst) Bulan Ketiga">Cuti Bersalin (Anak Keempat dst) Bulan Ketiga</option>
+              <option value="Cuti Besar Bulan Pertama">Cuti Besar Bulan Pertama</option>
+              <option value="Cuti Besar Bulan Kedua">Cuti Besar Bulan Kedua</option>
+              <option value="Cuti Besar Bulan Ketiga">Cuti Besar Bulan Ketiga</option>
+              <option value="Izin Tugas belajar">Izin Tugas belajar</option>
+              <option value="Izin Alasan Penting (1 s.d 2 Hari)">Izin Alasan Penting (1 s.d 2 Hari)</option>
+              <option value="Izin Alasan Penting (Lebih dari 2 Hari)">Izin Alasan Penting (Lebih dari 2 Hari)</option>
+              <option value="Izin Sakit (1 hari Sampai Dengan 14 Hari)">Izin Sakit (1 hari Sampai Dengan 14 Hari)</option>
+              <option value="Izin Sakit (Lebih dari 14 Hari Sampai Dengan 12 Bulan)">Izin Sakit (Lebih dari 14 Hari Sampai Dengan 12 Bulan)</option>
+              <option value="Izin Sakit (Lebih dari 12 Bulan Sampai Dengan 18 Bulan)">Izin Sakit (Lebih dari 12 Bulan Sampai Dengan 18 Bulan)</option>
+              <option value="Dinas Luar">Dinas Luar</option>
+          `;
+
+          const daysInMonth = new Date(year, month, 0).getDate();
+          const currentMonthStr = `${year}-${String(month).padStart(2, '0')}`;
+          const isMonthLocked = appSettings.lockedMonths.includes(currentMonthStr);
+          const today = new Date();
+          const currentYear = today.getFullYear();
+          const currentMonth = today.getMonth() + 1;
+          const isFutureMonth = year > currentYear || (year === currentYear && month > currentMonth);
+          let lockMessage = "";
+          if(isMonthLocked) lockMessage = 'Absensi untuk bulan ini telah dikunci.';
+          else if (isFutureMonth) lockMessage = 'Anda belum bisa mengisi absensi untuk bulan depan.';
+          document.getElementById('global-lock-message').innerText = lockMessage;
+          document.getElementById('save-button').disabled = isMonthLocked || isFutureMonth;
+          let tableHTML = '<table><thead><tr><th>Tanggal</th><th>Jam Masuk</th><th>Jam Pulang</th><th>Keterangan</th><th>Aksi</th></tr></thead><tbody>';
           
-          if (isHoliday) {
-            tableHTML += `<tr id="row-${dateStr}" class="holiday-row"><td>${day} <small>(${dayName})</small></td><td colspan="3">${appSettings.holidays[dateStr]}</td><td></td></tr>`;
-          } else if (isSunday) {
-            tableHTML += `<tr id="row-${dateStr}" class="sunday-row"><td>${day} <small>(${dayName})</small></td><td colspan="3">Hari Libur</td><td></td></tr>`;
-          } 
-          else if (isTeacherHoliday && (!existingData || (existingData.checkIn === "" && existingData.checkOut === "" && existingData.reason === ""))) {
-              tableHTML += `<tr id="row-${dateStr}"><td>${day} <small>(${dayName})</small></td><td><input type="time" id="in-${dateStr}" disabled></td><td><input type="time" id="out-${dateStr}" disabled></td><td><select id="reason-${dateStr}" onchange="handleReasonChange(event)"><option value="Hari Libur Sekolah" selected>Hari Libur Sekolah</option><option value="">-- Pilih Alasan Lain --</option><option value="Cuti Tahunan">Cuti Tahunan</option><option value="Dinas Luar">Dinas Luar</option></select></td><td><button class="clear-btn" onclick="handleClearRow(event)">Hapus</button></td></tr>`;
+          for (let day = 1; day <= daysInMonth; day++) {
+            const dateStr = `${currentMonthStr}-${String(day).padStart(2, '0')}`;
+            const dateObj = new Date(year, month - 1, day);
+            const dayOfWeek = dateObj.getDay();
+            const dayName = dateObj.toLocaleString('id-ID', { weekday: 'short' });
+            const isSunday = dayOfWeek === 0;
+            const isHoliday = !!appSettings.holidays[dateStr];
+            const isTeacherHoliday = appSettings.teacherHolidays[dayOfWeek - 1] && dayOfWeek !== 0; 
+            const existingData = attendanceData[dateStr];
+            
+            if (isHoliday) {
+              tableHTML += `<tr id="row-${dateStr}" class="holiday-row"><td>${day} <small>(${dayName})</small></td><td colspan="3">${appSettings.holidays[dateStr]}</td><td></td></tr>`;
+            } else if (isSunday) {
+              tableHTML += `<tr id="row-${dateStr}" class="sunday-row"><td>${day} <small>(${dayName})</small></td><td colspan="3">Hari Libur</td><td></td></tr>`;
+            } 
+            else if (isTeacherHoliday && (!existingData || (existingData.checkIn === "" && existingData.checkOut === "" && existingData.reason === ""))) {
+                tableHTML += `<tr id="row-${dateStr}"><td>${day} <small>(${dayName})</small></td><td><input type="time" id="in-${dateStr}" disabled></td><td><input type="time" id="out-${dateStr}" disabled></td><td><select id="reason-${dateStr}" onchange="handleReasonChange(event)">${teacherHolidayReasonOptions}</select></td><td><button class="clear-btn" onclick="handleClearRow(event)">Hapus</button></td></tr>`;
+            }
+            else {
+              const isDisabled = isMonthLocked || isFutureMonth;
+              tableHTML += `<tr id="row-${dateStr}"><td>${day} <small>(${dayName})</small></td><td><input type="time" id="in-${dateStr}" ${isDisabled ? 'disabled' : ''}></td><td><input type="time" id="out-${dateStr}" ${isDisabled ? 'disabled' : ''}></td><td><select id="reason-${dateStr}" ${isDisabled ? 'disabled' : ''} onchange="handleReasonChange(event)">${reasonOptions}</select></td><td><button class="clear-btn" onclick="handleClearRow(event)" ${isDisabled ? 'disabled' : ''}>Hapus</button></td></tr>`;
+            }
           }
-          else {
-            const isDisabled = isMonthLocked || isFutureMonth;
-            tableHTML += `<tr id="row-${dateStr}"><td>${day} <small>(${dayName})</small></td><td><input type="time" id="in-${dateStr}" ${isDisabled ? 'disabled' : ''}></td><td><input type="time" id="out-${dateStr}" ${isDisabled ? 'disabled' : ''}></td><td><select id="reason-${dateStr}" ${isDisabled ? 'disabled' : ''} onchange="handleReasonChange(event)"><option value="">-- Pilih Alasan --</option><option value="Hari Libur Sekolah">Hari Libur Sekolah</option><option value="Cuti Tahunan">Cuti Tahunan</option><option value="Dinas Luar">Dinas Luar</option></select></td><td><button class="clear-btn" onclick="handleClearRow(event)" ${isDisabled ? 'disabled' : ''}>Hapus</button></td></tr>`;
-          }
-        }
-        tableHTML += '</tbody></table>';
-        container.innerHTML = tableHTML;
-        populateAttendanceData(attendanceData);
+          tableHTML += '</tbody></table>';
+          container.innerHTML = tableHTML;
+          populateAttendanceData(attendanceData);
       }
       
       function populateAttendanceData(data) {
@@ -676,7 +751,6 @@
         if (reasonSelect) reasonSelect.value = '';
       }
       
-      // [MODIFIED] Ensure payload includes the correct school
       function handleSave() {
           const button = document.getElementById('save-button');
           document.querySelectorAll('#attendance-table-container tr.invalid-row').forEach(row => {
@@ -762,16 +836,25 @@
               .saveMonthlyAttendance(payload);
       }
 
-      // [MODIFIED] Use selectedSchool for summary
       function loadAndRenderSummary(year, month) {
-          const targetDate = (year && month) ? new Date(year, month - 1) : new Date();
-          const targetYear = targetDate.getFullYear();
-          const targetMonth = targetDate.getMonth() + 1;
-
           const summaryMonthInput = document.getElementById('summary-month-input');
-          if (!summaryMonthInput.value) {
-            summaryMonthInput.value = `${targetYear}-${String(targetMonth).padStart(2, '0')}`;
+          let targetYear, targetMonth;
+
+          if (year && month) {
+              targetYear = year;
+              targetMonth = month;
+          } else {
+              const monthInputValue = summaryMonthInput.value;
+              if (monthInputValue) {
+                  [targetYear, targetMonth] = monthInputValue.split('-').map(Number);
+              } else {
+                  const today = new Date();
+                  targetYear = today.getFullYear();
+                  targetMonth = today.getMonth() + 1;
+              }
           }
+          
+          summaryMonthInput.value = `${targetYear}-${String(targetMonth).padStart(2, '0')}`;
 
           const summaryValues = document.querySelectorAll('.summary-value');
           summaryValues.forEach(el => el.innerText = '...');
@@ -872,7 +955,6 @@
               .saveTeacherHolidays(currentUser.email, settings);
       }
 
-      // [MODIFIED] Pass school to import function
       function handleEmisImport() {
           const fileInput = document.getElementById('emis-file-input');
           const file = fileInput.files[0];
@@ -923,7 +1005,6 @@
           reader.readAsDataURL(file);
       }
 
-      // [MODIFIED] Pass school to export function
       function handleEmisExport() {
         const monthInput = document.getElementById('emis-export-month').value;
         const lockIdInput = document.getElementById('lock-id-input').value;
@@ -969,7 +1050,7 @@
       }
       
       // ===================================================================
-      // LOGIKA BARU UNTUK STAFF
+      // LOGIKA UNTUK STAFF
       // ===================================================================
       function showStaffDashboard(userData) {
           if (userData) currentUser = userData;
@@ -1076,7 +1157,8 @@
           
           document.getElementById("staff-dashboard-container").style.display = "none";
           document.getElementById("ceklok-container").style.display = "block";
-          document.getElementById('ceklok-teacher-name').innerText = `Untuk: ${selectedTeacherForStaff.name} (${selectedTeacherForStaff.school})`;
+          document.getElementById('ceklok-title').innerText = `Formulir Kehadiran - ${selectedTeacherForStaff.school}`;
+          document.getElementById('ceklok-teacher-name').innerText = `Untuk: ${selectedTeacherForStaff.name}`;
           loadMonthData(currentDate);
       }
       
@@ -1086,7 +1168,8 @@
           
           document.getElementById("staff-dashboard-container").style.display = "none";
           document.getElementById("emis-import-container").style.display = "block";
-          document.getElementById('emis-import-teacher-name').innerText = `Untuk: ${selectedTeacherForStaff.name} (${selectedTeacherForStaff.school})`;
+          document.getElementById('emis-import-title').innerText = `Import Data Kehadiran EMIS - ${selectedTeacherForStaff.school}`;
+          document.getElementById('emis-import-teacher-name').innerText = `Untuk: ${selectedTeacherForStaff.name}`;
       }
       
       function showEmisExportPageForStaff() {
@@ -1095,7 +1178,8 @@
 
           document.getElementById("staff-dashboard-container").style.display = "none";
           document.getElementById("emis-export-container").style.display = "block";
-          document.getElementById('emis-export-teacher-name').innerText = `Untuk: ${selectedTeacherForStaff.name} (${selectedTeacherForStaff.school})`;
+          document.getElementById('emis-export-title').innerText = `Eksport Data Kehadiran - ${selectedTeacherForStaff.school}`;
+          document.getElementById('emis-export-teacher-name').innerText = `Untuk: ${selectedTeacherForStaff.name}`;
       }
 
       function handleStaffDownloadAllRekap() {
@@ -1332,7 +1416,6 @@
         evt.currentTarget.className += " active";
       }
 
-      // [MODIFIED] Pass selectedSchool to rekap function
       function handleGuruDownloadRekap() {
           const monthInput = document.getElementById('guru-rekap-month').value;
           const button = document.getElementById('guru-download-rekap-button');
@@ -1367,7 +1450,6 @@
               .prepareMyRekapForPrint(currentUser.email, selectedSchool, monthInput);
       }
       
-      // [MODIFIED] Pass selectedSchool to rekap function
       function handleGuruDownloadAllRekap() {
           const monthInput = document.getElementById('guru-rekap-month').value; 
           const button = document.getElementById('guru-download-all-rekap-button');
