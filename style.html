@@ -541,4 +541,39 @@
     text-align: left;
     font-weight: 500;
   }
+
+  /* --- Style untuk Modal Pindah Sekolah --- */
+  #school-switcher-link {
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 3px;
+    transition: color 0.3s;
+  }
+  #school-switcher-link:hover {
+    color: var(--primary-color);
+  }
+  #school-list-container button {
+      width: 100%;
+      text-align: left;
+      margin-bottom: 8px;
+      padding: 15px;
+      background-color: #F9FAFB;
+      color: var(--text-primary-color);
+      font-weight: 500;
+      border: 1px solid var(--border-color);
+  }
+  #school-list-container button:hover:not(:disabled) {
+      background-color: #F3F4F6;
+      border-color: #D1D5DB;
+      transform: none;
+      box-shadow: none;
+  }
+  #school-list-container button:disabled {
+      background-color: var(--primary-color);
+      color: white;
+      font-weight: 600;
+      cursor: default;
+      opacity: 1;
+  }
 </style>
