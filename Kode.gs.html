@@ -7,6 +7,22 @@ const holidaysSheet = ss.getSheetByName("Holidays");
 const announcementsSheet = ss.getSheetByName("Announcements");
 const teacherHolidaysSheet = ss.getSheetByName("TeacherHolidays");
 
+function getUrutanNamaSheet_() {
+  let sheet = ss.getSheetByName("UrutanNama");
+  if (!sheet) {
+    sheet = ss.insertSheet("UrutanNama");
+    sheet.appendRow(["Nama", "Sekolah"]); // Kolom baru: Nama dan Sekolah
+    SpreadsheetApp.flush(); 
+  } else {
+    // Jika sheet sudah ada, pastikan header kolom kedua adalah "Sekolah"
+    const headers = sheet.getRange(1, 1, 1, 2).getValues()[0];
+    if (headers[1] === "Urutan") {
+      sheet.getRange(1, 2).setValue("Sekolah");
+    }
+  }
+  return sheet;
+}
+
 function getAttendanceSheet_(year, month) {
   const monthStr = String(month).padStart(2, '0');
   const yearStr = String(year).slice(-2);
@@ -451,6 +467,23 @@ function generateRekapPDF(selectedMonthYear, selectedSchool, singleUserEmail) {
     } else {
       daftarGuru = allUsers.filter(user => user[4] === 'guru' && (user[3] || "").split(',').map(s=>s.trim()).includes(selectedSchool))
                            .map(user => ({ email: user[0], name: user[2], school: selectedSchool }));
+      
+      const urutanNamaSheet = getUrutanNamaSheet_();
+      const urutanData = urutanNamaSheet.getDataRange().getValues().slice(1);
+      const schoolSortOrder = urutanData
+        .filter(row => String(row[1]).trim() === selectedSchool)
+        .map((row, index) => [String(row[0]).trim(), index]);
+      const urutanMap = new Map(schoolSortOrder);
+      
+      daftarGuru.sort((a, b) => {
+        const urutanA = urutanMap.has(String(a.name).trim()) ? urutanMap.get(String(a.name).trim()) : 999;
+        const urutanB = urutanMap.has(String(b.name).trim()) ? urutanMap.get(String(b.name).trim()) : 999;
+        if (urutanA !== urutanB) {
+          return urutanA - urutanB;
+        }
+        return a.name.localeCompare(b.name);
+      });
+
       fileNameSchoolPart = selectedSchool.replace(/\s/g, '_');
     }
 
@@ -669,10 +702,27 @@ function getSchoolTeachers(userEmail) {
   
   const userPrimarySchool = (currentUserRow[3] || "").split(',')[0].trim();
   
-  return allUsers.slice(1)
+  const teachers = allUsers.slice(1)
     .filter(user => user[4] === 'guru' && (user[3] || "").split(',').map(s => s.trim()).includes(userPrimarySchool))
-    .map(user => ({ email: user[0], name: user[2], school: userPrimarySchool }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .map(user => ({ email: user[0], name: user[2], school: userPrimarySchool }));
+    
+  const urutanNamaSheet = getUrutanNamaSheet_();
+  const urutanData = urutanNamaSheet.getDataRange().getValues().slice(1);
+  const schoolSortOrder = urutanData
+    .filter(row => String(row[1]).trim() === userPrimarySchool)
+    .map((row, index) => [String(row[0]).trim(), index]);
+  const urutanMap = new Map(schoolSortOrder);
+    
+  teachers.sort((a, b) => {
+    const urutanA = urutanMap.has(String(a.name).trim()) ? urutanMap.get(String(a.name).trim()) : 999;
+    const urutanB = urutanMap.has(String(b.name).trim()) ? urutanMap.get(String(b.name).trim()) : 999;
+    if (urutanA !== urutanB) {
+      return urutanA - urutanB;
+    }
+    return a.name.localeCompare(b.name);
+  });
+  
+  return teachers;
 }
 
 function getTeacherHolidays(email) {
