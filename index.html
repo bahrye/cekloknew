@@ -93,7 +93,7 @@
           </button>
 
           <p id="guru-rekap-message" class="message" style="margin-top: 5px; margin-bottom: 0;"></p>
-          <p id="guru-rekap-all-message" class="message" style="margin-top: 5px;"></p>
+          <p id="guru-rekap-all-message" class="message" style="margin-top: 5px; margin-bottom: 0;"></p>
 
           <hr style="margin: 25px 0;">
 
@@ -358,12 +358,37 @@
       // ===================================================================
       // FUNGSI UTILITAS
       // ===================================================================
-      function displayMessage(elementId, text, isSuccess = false) {
+      /**
+       * Menampilkan pesan kepada pengguna.
+       * @param {string} elementId - ID elemen paragraf untuk menampilkan pesan.
+       * @param {string} text - Teks pesan yang akan ditampilkan.
+       * @param {object} options - Opsi untuk pesan.
+       * @param {boolean} [options.isSuccess=false] - Jika true, warna teks menjadi hijau (sukses).
+       * @param {boolean} [options.isProcessing=false] - Jika true, warna teks menjadi abu-abu dan pesan tidak akan hilang otomatis.
+       */
+      function displayMessage(elementId, text, options = {}) {
+        const { isSuccess = false, isProcessing = false } = options;
         const msgElem = document.getElementById(elementId);
         if (msgElem) {
           msgElem.innerText = text;
-          msgElem.style.color = isSuccess ? 'var(--success-color)' : 'var(--danger-color)';
-          setTimeout(() => { msgElem.innerText = ''; }, 5000);
+          if (isSuccess) {
+            msgElem.style.color = 'var(--success-color)';
+          } else if (isProcessing) {
+            msgElem.style.color = 'var(--text-secondary-color)';
+          } else { // isError
+            msgElem.style.color = 'var(--danger-color)';
+          }
+          
+          // Pesan proses akan tetap ada sampai diganti oleh pesan lain.
+          // Pesan sukses atau error akan hilang setelah 10 detik.
+          if (!isProcessing) {
+            setTimeout(() => {
+              // Hanya hapus pesan jika belum ada pesan baru yang muncul.
+              if (msgElem.innerText === text) { 
+                msgElem.innerText = '';
+              }
+            }, 10000);
+          }
         }
       }
 
@@ -489,7 +514,7 @@
         document.getElementById("emis-export-container").style.display = "none";
         document.getElementById('email').value = "";
         document.getElementById('password').value = "";
-        displayMessage('login-message', "Anda berhasil logout.", true);
+        displayMessage('login-message', "Anda berhasil logout.", { isSuccess: true });
         const loginButton = document.getElementById('login-button');
         if (loginButton) {
           loginButton.disabled = false;
@@ -818,11 +843,11 @@
 
           button.disabled = true;
           button.textContent = "Menyimpan...";
-          document.getElementById('save-message').innerText = "";
+          displayMessage('save-message', 'Menyimpan data...', { isProcessing: true });
 
           google.script.run
               .withSuccessHandler(r => {
-                  displayMessage('save-message', r.message, true);
+                  displayMessage('save-message', r.message, { isSuccess: true });
                   button.disabled = false;
                   button.textContent = "Simpan Semua Perubahan";
                   loadMonthData(currentDate); 
@@ -885,12 +910,47 @@
       }
       
       function renderSummary(summary) {
+          const kehadiranEl = document.getElementById('summary-kehadiran');
+          const alpaEl = document.getElementById('summary-alpa');
+          const persentaseEl = document.getElementById('summary-persentase');
+          const ceklokEl = document.getElementById('summary-ceklok');
+
+          // Set text values
           document.getElementById('summary-hari-kerja').innerText = summary.hariKerja;
-          document.getElementById('summary-kehadiran').innerText = summary.kehadiran;
-          document.getElementById('summary-alpa').innerText = summary.alpa;
+          kehadiranEl.innerText = summary.kehadiran;
+          alpaEl.innerText = summary.alpa;
           document.getElementById('summary-alasan').innerText = summary.alasan;
-          document.getElementById('summary-persentase').innerText = summary.persentase + '%';
-          document.getElementById('summary-ceklok').innerText = summary.ceklok;
+          persentaseEl.innerText = summary.persentase + '%';
+          ceklokEl.innerText = summary.ceklok;
+
+          // Atur warna untuk 'Hadir'
+          if (parseInt(summary.persentase) === 100) {
+              kehadiranEl.style.color = 'var(--success-color)';
+          } else if (parseInt(summary.kehadiran) > 0) {
+              kehadiranEl.style.color = 'var(--primary-color)';
+          } else {
+              kehadiranEl.style.color = 'var(--danger-color)';
+          }
+
+          // Atur warna untuk 'Alpa'
+          if (parseInt(summary.alpa) > 0) {
+              alpaEl.style.color = 'var(--danger-color)';
+          } else {
+              alpaEl.style.color = 'var(--success-color)';
+          }
+
+          // Atur warna untuk 'Persentase' dan 'Ceklok'
+          const percentage = parseInt(summary.persentase);
+          let persentaseColor;
+          if (percentage === 100) {
+              persentaseColor = 'var(--success-color)';
+          } else if (percentage >= 76) {
+              persentaseColor = 'var(--warning-color)';
+          } else {
+              persentaseColor = 'var(--danger-color)';
+          }
+          persentaseEl.style.color = persentaseColor;
+          ceklokEl.style.color = persentaseColor;
       }
       
       function renderTeacherHolidaySwitches() {
@@ -944,7 +1004,7 @@
           button.textContent = 'Menyimpan...';
           google.script.run
               .withSuccessHandler(response => {
-                  displayMessage('teacher-holidays-message', response.message, true);
+                  displayMessage('teacher-holidays-message', response.message, { isSuccess: true });
                   button.disabled = false;
                   button.textContent = 'Simpan Pengaturan';
               })
@@ -966,7 +1026,7 @@
           const button = document.getElementById('import-emis-button');
           button.disabled = true;
           button.textContent = 'Mengimpor...';
-          displayMessage('emis-import-message', 'Sedang mengunggah dan memproses file...', true);
+          displayMessage('emis-import-message', 'Sedang mengunggah dan memproses file...', { isProcessing: true });
           
           const schoolForImport = (currentUser.role === 'staff' && selectedTeacherForStaff) ? selectedTeacherForStaff.school : selectedSchool;
           const targetEmail = (currentUser.role === 'staff' && selectedTeacherForStaff) ? selectedTeacherForStaff.email : currentUser.email;
@@ -985,16 +1045,20 @@
                       button.disabled = false;
                       button.textContent = 'Proses Import';
                       if (response.status === 'success') {
-                          // Langsung pindah ke halaman ceklok setelah berhasil
-                          currentDate = new Date(response.year, response.month - 1, 1);
-                          fileInput.value = ""; // Bersihkan input file
-                          if (currentUser.role === 'staff') {
-                            showCeklokPageForStaff(true); // true menandakan ini adalah redirect
-                          } else {
-                            showCeklokPage();
-                          }
+                          const successMsg = `Berhasil mengimpor ${response.count} data untuk bulan ${response.monthName}. Anda akan dialihkan...`;
+                          displayMessage('emis-import-message', successMsg, { isSuccess: true });
+                          
+                          setTimeout(() => {
+                              currentDate = new Date(response.year, response.month - 1, 1);
+                              fileInput.value = ""; 
+                              if (currentUser.role === 'staff') {
+                                showCeklokPageForStaff(true);
+                              } else {
+                                showCeklokPage();
+                              }
+                          }, 4000);
                       } else {
-                          displayMessage('emis-import-message', response.message, false);
+                          displayMessage('emis-import-message', response.message);
                       }
                   })
                   .withFailureHandler(error => {
@@ -1025,7 +1089,7 @@
 
         button.disabled = true;
         button.textContent = 'Membuat File...';
-        displayMessage('emis-export-message', 'Sedang memproses & membuat file Excel, mohon tunggu...', true);
+        displayMessage('emis-export-message', 'Sedang memproses & membuat file Excel, mohon tunggu...', { isProcessing: true });
         
         google.script.run
           .withSuccessHandler(response => {
@@ -1036,7 +1100,7 @@
               document.body.appendChild(link);
               link.click();
               document.body.removeChild(link);
-              displayMessage('emis-export-message', 'File Excel berhasil dibuat dan sedang diunduh!', true);
+              displayMessage('emis-export-message', 'File Excel berhasil dibuat dan sedang diunduh!', { isSuccess: true });
             } else {
               displayMessage('emis-export-message', 'Error: ' + response.message);
             }
@@ -1194,7 +1258,7 @@
           }
           button.disabled = true;
           button.textContent = 'Membuat PDF...';
-          displayMessage('staff-rekap-all-message', 'Sedang memproses rekap semua guru...', true);
+          displayMessage('staff-rekap-all-message', 'Sedang memproses rekap semua guru...', { isProcessing: true });
           google.script.run
               .withSuccessHandler(response => {
                   if (response.success) {
@@ -1204,7 +1268,7 @@
                       document.body.appendChild(link);
                       link.click();
                       document.body.removeChild(link);
-                      displayMessage('staff-rekap-all-message', 'PDF berhasil dibuat dan sedang diunduh!', true);
+                      displayMessage('staff-rekap-all-message', 'PDF berhasil dibuat dan sedang diunduh!', { isSuccess: true });
                   } else {
                       displayMessage('staff-rekap-all-message', 'Error: ' + response.error);
                   }
@@ -1287,13 +1351,13 @@
         const apiCall = userData.originalEmail ? 'updateUser' : 'addUser';
         google.script.run.withSuccessHandler(r => {
           if (r.status === 'success') {
-            displayMessage('user-form-message', r.message, true);
+            displayMessage('user-form-message', r.message, { isSuccess: true });
             setTimeout(() => {
               closeUserForm();
               loadUsers();
             }, 1500);
           } else {
-            displayMessage('user-form-message', r.message, false);
+            displayMessage('user-form-message', r.message);
           }
         })[apiCall](currentUser.email, userData);
       }
@@ -1329,7 +1393,7 @@
       function saveLockedMonthsSettings() {
         const input = document.getElementById('locked-months').value;
         const months = input.split(',').map(s => s.trim()).filter(Boolean);
-        google.script.run.withSuccessHandler(r => displayMessage('locked-months-message', r.message, true)).saveLockedMonths(currentUser.email, months);
+        google.script.run.withSuccessHandler(r => displayMessage('locked-months-message', r.message, { isSuccess: true })).saveLockedMonths(currentUser.email, months);
       }
       
       function saveHolidaysSettings() {
@@ -1340,12 +1404,12 @@
           const description = row.querySelector('input[type="text"]').value;
           if (date && description) holidays.push({ date, description });
         });
-        google.script.run.withSuccessHandler(r => displayMessage('holidays-message', r.message, true)).saveHolidays(currentUser.email, holidays);
+        google.script.run.withSuccessHandler(r => displayMessage('holidays-message', r.message, { isSuccess: true })).saveHolidays(currentUser.email, holidays);
       }
 
       function saveAnnouncementsSettings() {
         const text = document.getElementById('announcement-input').value;
-        google.script.run.withSuccessHandler(r => displayMessage('announcements-message', r.message, true)).saveAnnouncements(currentUser.email, text);
+        google.script.run.withSuccessHandler(r => displayMessage('announcements-message', r.message, { isSuccess: true })).saveAnnouncements(currentUser.email, text);
       }
       
       function loadSchoolDropdown() {
@@ -1384,7 +1448,7 @@
           }
           button.disabled = true;
           button.textContent = 'Membuat PDF...';
-          displayMessage('rekap-message', 'Sedang memproses & membuat PDF, mohon tunggu...', true);
+          displayMessage('rekap-message', 'Sedang memproses & membuat PDF, mohon tunggu...', { isProcessing: true });
           google.script.run
               .withSuccessHandler(response => {
                   if (response.success) {
@@ -1394,7 +1458,7 @@
                       document.body.appendChild(link);
                       link.click();
                       document.body.removeChild(link);
-                      displayMessage('rekap-message', 'PDF berhasil dibuat dan sedang diunduh!', true);
+                      displayMessage('rekap-message', 'PDF berhasil dibuat dan sedang diunduh!', { isSuccess: true });
                   } else {
                       displayMessage('rekap-message', 'Error: ' + response.error);
                   }
@@ -1428,7 +1492,7 @@
           }
           button.disabled = true;
           button.textContent = 'Membuat PDF...';
-          displayMessage('guru-rekap-message', 'Sedang memproses & membuat PDF, mohon tunggu...', true);
+          displayMessage('guru-rekap-message', 'Sedang memproses & membuat PDF, mohon tunggu...', { isProcessing: true });
           google.script.run
               .withSuccessHandler(response => {
                   if (response.success) {
@@ -1438,7 +1502,7 @@
                       document.body.appendChild(link);
                       link.click();
                       document.body.removeChild(link);
-                      displayMessage('guru-rekap-message', 'PDF berhasil dibuat dan sedang diunduh!', true);
+                      displayMessage('guru-rekap-message', 'PDF berhasil dibuat dan sedang diunduh!', { isSuccess: true });
                   } else {
                       displayMessage('guru-rekap-message', 'Error: ' + response.error);
                   }
@@ -1466,7 +1530,7 @@
           }
           button.disabled = true;
           button.textContent = 'Membuat PDF...';
-          displayMessage('guru-rekap-all-message', 'Sedang memproses rekap semua guru, ini mungkin perlu waktu lebih lama...', true);
+          displayMessage('guru-rekap-all-message', 'Sedang memproses rekap semua guru, ini mungkin perlu waktu lebih lama...', { isProcessing: true });
           google.script.run
               .withSuccessHandler(response => {
                   if (response.success) {
@@ -1476,7 +1540,7 @@
                       document.body.appendChild(link);
                       link.click();
                       document.body.removeChild(link);
-                      displayMessage('guru-rekap-all-message', 'PDF berhasil dibuat dan sedang diunduh!', true);
+                      displayMessage('guru-rekap-all-message', 'PDF berhasil dibuat dan sedang diunduh!', { isSuccess: true });
                   } else {
                       displayMessage('guru-rekap-all-message', 'Error: ' + response.error);
                   }
