@@ -569,6 +569,7 @@
 
       function showCeklokPage() {
         document.getElementById("guru-dashboard-container").style.display = "none";
+        document.getElementById("emis-import-container").style.display = "none"; // Baris ini ditambahkan
         document.getElementById("ceklok-container").style.display = "block";
         document.getElementById('ceklok-teacher-name').innerText = ''; 
         document.getElementById('ceklok-title').innerText = `Formulir Kehadiran - ${selectedSchool}`;
@@ -984,13 +985,14 @@
                       button.disabled = false;
                       button.textContent = 'Proses Import';
                       if (response.status === 'success') {
-                          const successMessage = `Import bulan ${response.monthName} ${response.year} berhasil, data yang terinput sebanyak ${response.count} data.`;
-                          displayMessage('emis-import-message', successMessage, true);
-                          fileInput.value = "";
+                          // Langsung pindah ke halaman ceklok setelah berhasil
                           currentDate = new Date(response.year, response.month - 1, 1);
-                          setTimeout(() => {
-                              (currentUser.role === 'staff') ? showCeklokPageForStaff(true) : showCeklokPage();
-                          }, 2500); 
+                          fileInput.value = ""; // Bersihkan input file
+                          if (currentUser.role === 'staff') {
+                            showCeklokPageForStaff(true); // true menandakan ini adalah redirect
+                          } else {
+                            showCeklokPage();
+                          }
                       } else {
                           displayMessage('emis-import-message', response.message, false);
                       }
@@ -1156,6 +1158,7 @@
           if (!selectedTeacherForStaff) return;
           
           document.getElementById("staff-dashboard-container").style.display = "none";
+          document.getElementById("emis-import-container").style.display = "none"; // Baris ini ditambahkan
           document.getElementById("ceklok-container").style.display = "block";
           document.getElementById('ceklok-title').innerText = `Formulir Kehadiran - ${selectedTeacherForStaff.school}`;
           document.getElementById('ceklok-teacher-name').innerText = `Untuk: ${selectedTeacherForStaff.name}`;
