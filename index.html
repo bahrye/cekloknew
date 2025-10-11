@@ -389,25 +389,30 @@
         }
       }
 
-      function openSptjmSettingsModal() {
-        // Panggil data yang tersimpan dan isi form
-        google.script.run.withSuccessHandler(settings => {
-          document.getElementById('sptjm-kop-url').value = settings.kopUrl || '';
-          document.getElementById('sptjm-nip').value = settings.nip || '';
-          document.getElementById('sptjm-jabatan').value = settings.jabatan || '';
-          document.getElementById('sptjm-kementerian').value = settings.kementerian || '';
-          document.getElementById('sptjm-bulan').value = settings.bulan || '';
-          document.getElementById('sptjm-tempat').value = settings.tempat || '';
-          document.getElementById('sptjm-tanggal').value = settings.tanggal || '';
-          
-          // Tampilkan modal setelah data dimuat
-          document.getElementById('sptjm-settings-modal').style.display = 'block';
-        }).getSptjmSettings();
-      }
+      function showSptjmSettingsPage() {
+        document.getElementById('lkh-sptjm-dashboard-container').style.display = 'none';
+        document.getElementById('sptjm-settings-container').style.display = 'block';
 
-      function closeSptjmSettingsModal() {
-        document.getElementById('sptjm-settings-modal').style.display = 'none';
-        displayMessage('sptjm-settings-message', ''); // Bersihkan pesan
+        google.script.run
+          .withSuccessHandler(settings => {
+            if (settings) { 
+              document.getElementById('sptjm-kop-url').value = settings.kopUrl || '';
+              document.getElementById('sptjm-nip').value = settings.nip || '';
+              document.getElementById('sptjm-jabatan').value = settings.jabatan || '';
+              document.getElementById('sptjm-kementerian').value = settings.kementerian || '';
+              document.getElementById('sptjm-bulan').value = settings.bulan || '';
+              document.getElementById('sptjm-tempat').value = settings.tempat || '';
+              document.getElementById('sptjm-tanggal').value = settings.tanggal || '';
+              document.getElementById('sptjm-nama-kepala').value = settings.namaKepala || '';
+              document.getElementById('sptjm-nip-kepala').value = settings.nipKepala || '';
+            }
+          })
+          .withFailureHandler(error => {
+              // Menampilkan pesan error yang lebih spesifik dari server
+              displayMessage('sptjm-settings-message', error.message);
+              console.error('Error saat memuat pengaturan:', error);
+          })
+          .getSptjmSettings(currentUser.email);
       }
 
       function handleSaveSptjmSettings() {
@@ -418,19 +423,21 @@
           kementerian: document.getElementById('sptjm-kementerian').value,
           bulan: document.getElementById('sptjm-bulan').value,
           tempat: document.getElementById('sptjm-tempat').value,
-          tanggal: document.getElementById('sptjm-tanggal').value
+          tanggal: document.getElementById('sptjm-tanggal').value,
+          namaKepala: document.getElementById('sptjm-nama-kepala').value,
+          nipKepala: document.getElementById('sptjm-nip-kepala').value
         };
 
         displayMessage('sptjm-settings-message', 'Menyimpan...', { isProcessing: true });
-        
+
         google.script.run.withSuccessHandler(response => {
           if (response.status === 'success') {
             displayMessage('sptjm-settings-message', response.message, { isSuccess: true });
-            setTimeout(closeSptjmSettingsModal, 2000); // Tutup modal setelah 2 detik
+            setTimeout(showLkhSptjmDashboard, 2000); // Kembali ke dasbor LKH setelah 2 detik
           } else {
             displayMessage('sptjm-settings-message', response.message);
           }
-        }).saveSptjmSettings(settings);
+        }).saveSptjmSettings(currentUser.email, settings);
       }
 
       // ===================================================================
@@ -554,6 +561,7 @@
         document.getElementById("emis-import-container").style.display = "none";
         document.getElementById("emis-export-container").style.display = "none";
         document.getElementById("lkh-sptjm-dashboard-container").style.display = "none";
+        document.getElementById("sptjm-settings-container").style.display = "none";
         document.getElementById('email').value = "";
         document.getElementById('password').value = "";
         displayMessage('login-message', "Anda berhasil logout.", { isSuccess: true });
@@ -645,6 +653,7 @@
       function showLkhSptjmDashboard() {
         document.getElementById("guru-dashboard-container").style.display = "none";
         document.getElementById("lkh-sptjm-dashboard-container").style.display = "block";
+        document.getElementById("sptjm-settings-container").style.display = "none";
       }
 
       function showCeklokPage() {
