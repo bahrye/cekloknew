@@ -6,6 +6,7 @@ const settingsSheet = ss.getSheetByName("Settings");
 const holidaysSheet = ss.getSheetByName("Holidays");
 const announcementsSheet = ss.getSheetByName("Announcements");
 const teacherHolidaysSheet = ss.getSheetByName("TeacherHolidays");
+const lkhUsersSheet = ss.getSheetByName("LKHUsers"); 
 
 function getUrutanNamaSheet_() {
   let sheet = ss.getSheetByName("UrutanNama");
@@ -56,6 +57,13 @@ function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
+// --- FUNGSI BARU UNTUK CEK AKSES LKH ---
+function checkIfLKHUser_(email) {
+  if (!email || !lkhUsersSheet) return false;
+  const lkhUsers = lkhUsersSheet.getRange("A:A").getValues().flat();
+  return lkhUsers.some(userEmail => userEmail.toLowerCase() === email.toLowerCase());
+}
+
 function checkIfAdmin(email) {
   if (!email) return false;
   const users = usersSheet.getDataRange().getValues();
@@ -85,6 +93,7 @@ function userLogin(email, password) {
       if (users[i][0].toLowerCase() === email.toLowerCase() && users[i][1] == password && users[i][4]) { 
         const schoolString = users[i][3] || "";
         const schools = schoolString.split(',').map(s => s.trim()).filter(Boolean);
+        const hasLKHFeature = checkIfLKHUser_(email);
         
         return { 
           status: "success", 
@@ -92,7 +101,8 @@ function userLogin(email, password) {
             email: users[i][0],
             name: users[i][2], 
             schools: schools,
-            role: users[i][4]
+            role: users[i][4],
+            hasLKHFeature: hasLKHFeature
           }
         };
       }
@@ -862,4 +872,26 @@ function setupDailyTrigger() {
     .atHour(8)
     .create();
   Logger.log('Trigger harian untuk pengingat email berhasil dibuat.');
+}
+
+function saveSptjmSettings(settings) {
+  try {
+    const userProperties = PropertiesService.getUserProperties();
+    userProperties.setProperty('sptjmSettings', JSON.stringify(settings));
+    return { status: "success", message: "Pengaturan berhasil disimpan." };
+  } catch (e) {
+    Logger.log("Error di saveSptjmSettings: " + e.toString());
+    return { status: "error", message: "Gagal menyimpan pengaturan: " + e.message };
+  }
+}
+
+function getSptjmSettings() {
+  try {
+    const userProperties = PropertiesService.getUserProperties();
+    const settings = userProperties.getProperty('sptjmSettings');
+    return settings ? JSON.parse(settings) : {};
+  } catch (e) {
+    Logger.log("Error di getSptjmSettings: " + e.toString());
+    return {};
+  }
 }
