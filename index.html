@@ -397,10 +397,9 @@
         google.script.run
           .withSuccessHandler(settings => {
             if (settings) { 
-              document.getElementById('sptjm-kop-url').value = settings.kopUrl || '';
+              // Baris yang menyebabkan error telah dihapus
               document.getElementById('sptjm-nip').value = settings.nip || '';
               document.getElementById('sptjm-jabatan').value = settings.jabatan || '';
-              document.getElementById('sptjm-kementerian').value = settings.kementerian || '';
               document.getElementById('sptjm-bulan').value = settings.bulan || '';
               document.getElementById('sptjm-tempat').value = settings.tempat || '';
               document.getElementById('sptjm-tanggal').value = settings.tanggal || '';
@@ -418,10 +417,9 @@
 
       function handleSaveSptjmSettings() {
         const settings = {
-          kopUrl: document.getElementById('sptjm-kop-url').value,
+          // Properti yang sudah dihapus tidak lagi dibaca
           nip: document.getElementById('sptjm-nip').value,
           jabatan: document.getElementById('sptjm-jabatan').value,
-          kementerian: document.getElementById('sptjm-kementerian').value,
           bulan: document.getElementById('sptjm-bulan').value,
           tempat: document.getElementById('sptjm-tempat').value,
           tanggal: document.getElementById('sptjm-tanggal').value,
@@ -444,27 +442,31 @@
       function showSptjmViewPage() {
           document.getElementById('lkh-sptjm-dashboard-container').style.display = 'none';
           document.getElementById('sptjm-view-container').style.display = 'block';
+          
+          // 1. Dapatkan elemen tombol dan nonaktifkan di awal
+          const downloadButton = document.getElementById('download-sptjm-pdf-button');
+          downloadButton.disabled = true;
 
           // Menampilkan pesan "Memuat..." saat data diambil
           const fieldsToLoad = [
               'sptjm-view-name', 'sptjm-view-nip', 'sptjm-view-jabatan', 'sptjm-view-satker', 
               'sptjm-view-month', 'sptjm-view-headmaster-name', 'sptjm-view-headmaster-nip',
-              'sptjm-view-signature-name', 'sptjm-view-signature-nip'
+              'sptjm-view-signature-name', 'sptjm-view-signature-nip', 'sptjm-view-place-date'
           ];
-          fieldsToLoad.forEach(id => document.getElementById(id).innerText = "Memuat...");
-          document.getElementById('sptjm-view-kop').src = "";
-
+          fieldsToLoad.forEach(id => {
+            const el = document.getElementById(id);
+            if(el) el.innerText = "Memuat...";
+          });
 
           google.script.run
               .withSuccessHandler(data => {
                   if (data.error) {
                       displayMessage('sptjm-download-message', data.error);
-                      return;
+                      return; // Tombol tetap nonaktif jika ada error
                   }
                   const settings = data.settings || {};
                   const user = data.user || {};
 
-                  document.getElementById('sptjm-view-kop').src = settings.kopUrl || "https://via.placeholder.com/800x150.png?text=URL+Kop+Surat+Belum+Diatur";
                   document.getElementById('sptjm-view-name').innerText = user.name || '-';
                   document.getElementById('sptjm-view-nip').innerText = settings.nip || '-';
                   document.getElementById('sptjm-view-jabatan').innerText = settings.jabatan || 'Guru';
@@ -474,14 +476,17 @@
                   const signatureDate = settings.tanggal ? new Date(settings.tanggal).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'UTC' }) : '[Tanggal]';
                   document.getElementById('sptjm-view-place-date').innerText = `${settings.tempat || '[Tempat]'}, ${signatureDate}`;
 
-                  // Tanda tangan
                   document.getElementById('sptjm-view-signature-name').innerText = user.name || '-';
                   document.getElementById('sptjm-view-signature-nip').innerText = settings.nip || '-';
                   document.getElementById('sptjm-view-headmaster-name').innerText = settings.namaKepala || '[Nama Kepala Madrasah]';
                   document.getElementById('sptjm-view-headmaster-nip').innerText = settings.nipKepala || '-';
+                  
+                  // 2. Aktifkan tombol setelah semua data berhasil dimuat
+                  downloadButton.disabled = false;
               })
               .withFailureHandler(err => {
                   displayMessage('sptjm-download-message', `Error: ${err.message}`);
+                  // Tombol tetap nonaktif jika ada error
               })
               .getSptjmDataForUser(currentUser.email, selectedSchool);
       }
@@ -494,7 +499,6 @@
 
           // Mengumpulkan semua data dari tampilan untuk dikirim ke server
           const data = {
-              kopUrl: document.getElementById('sptjm-view-kop').src,
               name: document.getElementById('sptjm-view-name').innerText,
               nip: document.getElementById('sptjm-view-nip').innerText,
               jabatan: document.getElementById('sptjm-view-jabatan').innerText,
