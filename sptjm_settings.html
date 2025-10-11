@@ -1,0 +1,49 @@
+<div id="sptjm-settings-modal" class="modal">
+  <div class="modal-content">
+    <span class="close-btn" onclick="closeSptjmSettingsModal()">&times;</span>
+    <h3 id="form-title">Pengaturan Cetak SPTJM</h3>
+    <p>Pengaturan ini akan disimpan untuk akun Anda dan digunakan saat membuat dokumen SPTJM.</p>
+
+    <div class="input-group">
+      <label for="sptjm-kop-url">URL Gambar Kop Surat</label>
+      <input type="text" id="sptjm-kop-url" placeholder="https://contoh.com/kop.png">
+    </div>
+    
+    <p style="font-size: 13px; text-align: center; margin-top: -15px; color: var(--text-secondary-color);">
+      Untuk saat ini, silakan gunakan URL gambar yang tersedia online.
+    </p>
+
+    <div class="input-group">
+      <label for="sptjm-nip">NIP (Kosongkan jika tidak ada)</label>
+      <input type="text" id="sptjm-nip" placeholder="Contoh: 198501012010011001">
+    </div>
+
+    <div class="input-group">
+      <label for="sptjm-jabatan">Jabatan</label>
+      <input type="text" id="sptjm-jabatan" placeholder="Contoh: Guru Sertifikasi pada MIS Butung">
+    </div>
+
+    <div class="input-group">
+      <label for="sptjm-kementerian">Kementerian/Lembaga</label>
+      <input type="text" id="sptjm-kementerian" placeholder="Contoh: Kementerian Agama Kab. Bulukumba">
+    </div>
+    
+    <div class="input-group">
+      <label for="sptjm-bulan">Bulan dalam Isi Surat</label>
+      <input type="text" id="sptjm-bulan" placeholder="Contoh: September">
+    </div>
+
+    <div class="input-group">
+      <label for="sptjm-tempat">Tempat Tanda Tangan</label>
+      <input type="text" id="sptjm-tempat" placeholder="Contoh: Bulukumba">
+    </div>
+    
+    <div class="input-group">
+      <label for="sptjm-tanggal">Tanggal Tanda Tangan</label>
+      <input type="date" id="sptjm-tanggal">
+    </div>
+
+    <button onclick="handleSaveSptjmSettings()">Simpan Pengaturan</button>
+    <p id="sptjm-settings-message" class="message"></p>
+  </div>
+</div>
