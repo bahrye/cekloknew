@@ -985,3 +985,155 @@ function saveSptjmSettings(userEmail, settings) {
     return { status: "error", message: `Gagal menyimpan pengaturan: ${e.message}` };
   }
 }
+
+function getSptjmDataForUser(email, school) {
+  try {
+    // Ambil data pengguna (nama dan sekolah sebagai Satuan Kerja)
+    const users = usersSheet.getDataRange().getValues();
+    const userRow = users.find(u => u[0].toLowerCase() === email.toLowerCase());
+    if (!userRow) {
+      return { error: "Data pengguna tidak ditemukan." };
+    }
+    const userData = {
+      name: userRow[2],
+      school: school 
+    };
+    
+    // Ambil pengaturan SPTJM
+    const settingsData = getSptjmSettings(email);
+
+    return { user: userData, settings: settingsData };
+  } catch (e) {
+    Logger.log(`Error di getSptjmDataForUser: ${e.toString()}`);
+    return { error: e.message };
+  }
+}
+
+function generateSptjmPdf(data) {
+  let tempDocId = null;
+  try {
+    const docName = `SPTJM_${data.name.replace(/\s/g, '_')}_${new Date().getTime()}`;
+    const tempDoc = DocumentApp.create(docName);
+    tempDocId = tempDoc.getId();
+    const body = tempDoc.getBody();
+    body.clear();
+
+    // --- Pengaturan Halaman (A4 Potrait, margin 1cm) ---
+    const marginInPoints = 28.35; // 1 cm
+    body.setMarginTop(marginInPoints);
+    body.setMarginBottom(marginInPoints);
+    body.setMarginLeft(marginInPoints);
+    body.setMarginRight(marginInPoints);
+
+    // --- Objek Gaya (Styling) ---
+    const bodyStyle = {};
+    bodyStyle[DocumentApp.Attribute.FONT_FAMILY] = 'Calibri';
+    bodyStyle[DocumentApp.Attribute.FONT_SIZE] = 12;
+    bodyStyle[DocumentApp.Attribute.BOLD] = false;
+
+    const titleStyle = {};
+    titleStyle[DocumentApp.Attribute.FONT_FAMILY] = 'Calibri';
+    titleStyle[DocumentApp.Attribute.FONT_SIZE] = 14;
+    titleStyle[DocumentApp.Attribute.BOLD] = true;
+
+    body.setAttributes(bodyStyle);
+
+    // 1. Kop Surat
+    if (data.kopUrl && data.kopUrl.startsWith('http')) {
+      try {
+        const imageBlob = UrlFetchApp.fetch(data.kopUrl).getBlob();
+        const paragraph = body.appendParagraph('');
+        paragraph.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+        const image = paragraph.appendInlineImage(imageBlob);
+        
+        const fullWidth = body.getPageWidth() - body.getMarginLeft() - body.getMarginRight();
+        const imageWidth = image.getWidth();
+        const imageHeight = image.getHeight();
+        
+        const ratio = imageWidth / fullWidth;
+        image.setWidth(fullWidth).setHeight(imageHeight / ratio);
+
+      } catch (e) {
+        body.appendParagraph(`[Gagal memuat Kop Surat]`).setBold(false).setFontSize(9);
+      }
+    }
+
+    // 2. Judul
+    body.appendParagraph("").setSpacingAfter(5);
+    const title = body.appendParagraph('SURAT PERNYATAAN TANGGUNG JAWAB MUTLAK');
+    title.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+    title.setAttributes(titleStyle);
+    title.setSpacingAfter(30); // Atur spasi setelah judul
+
+    // 3. Intro & Data Diri
+    body.appendParagraph('Yang bertanda tangan di bawah ini:').setSpacingAfter(10).setBold(false);
+    const personalDataTable = body.appendTable([
+      ['Nama', ':', data.name],
+      ['NIP', ':', data.nip || '-'],
+      ['Jabatan', ':', data.jabatan || 'Guru Mapel Informatika']
+    ]);
+    personalDataTable.setBorderWidth(0);
+    personalDataTable.getRow(0).getCell(0).setWidth(80);
+    personalDataTable.getRow(0).getCell(1).setWidth(10);
+
+    // 5. Isi Pernyataan
+    body.appendParagraph("").setSpacingBefore(15);
+    body.appendParagraph('Menyatakan dengan sesungguhnya bahwa :').setBold(false).setLineSpacing(1.15);
+    
+    // Poin 1 & 2 dengan spasi baris standar (1.15) agar mudah dibaca
+    const listItem1 = body.appendListItem('').setLineSpacing(1.15);
+    listItem1.setGlyphType(DocumentApp.GlyphType.DECIMAL);
+    listItem1.setAlignment(DocumentApp.HorizontalAlignment.JUSTIFY);
+    listItem1.appendText('Perhitungan kehadiran guru non PNS Sertifikasi (Inpassing dan Non Inpassing) yang terdapat pada daftar absensi ceklok di ').setBold(false);
+    listItem1.appendText(data.satker || '[Nama Sekolah]').setBold(true);
+    listItem1.appendText(' untuk bulan ').setBold(false);
+    listItem1.appendText(data.bulan || '[Bulan]').setBold(true);
+    listItem1.appendText(' adalah benar.').setBold(false);
+    
+    const listItem2 = body.appendListItem('').setLineSpacing(1.15);
+    listItem2.setGlyphType(DocumentApp.GlyphType.DECIMAL);
+    listItem2.setAlignment(DocumentApp.HorizontalAlignment.JUSTIFY);
+    listItem2.appendText('Apabila di kemudian hari terdapat kesalahan berakibat pada kelebihan Pembayaran Uang Makan atau Pembayaran Tunjangan Kinerja Guru, kami bersedia untuk menyetor kelebihan tersebut ke Kas Negara.').setBold(false);
+    
+    body.appendParagraph('Demikian pernyataan ini kami buat dengan sebenar-benarnya.').setSpacingBefore(25).setBold(false).setLineSpacing(1.15);
+
+    // 6. Blok Tanda Tangan (dengan spasi yang dikurangi)
+    const signatureTable = body.appendTable([['', '']]).setBorderWidth(0);
+    const availableSignatureWidth = body.getPageWidth() - body.getMarginLeft() - body.getMarginRight();
+    signatureTable.getRow(0).getCell(0).setWidth(availableSignatureWidth / 2);
+    signatureTable.getRow(0).getCell(1).setWidth(availableSignatureWidth / 2);
+    
+    // Kolom Kiri
+    const leftCell = signatureTable.getCell(0, 0);
+    leftCell.appendParagraph('Mengetahui,').setAlignment(DocumentApp.HorizontalAlignment.CENTER).setSpacingBefore(20).setBold(false);
+    leftCell.appendParagraph('Kepala Madrasah,').setAlignment(DocumentApp.HorizontalAlignment.CENTER).setSpacingAfter(60).setBold(false); // Spasi untuk TTD dikurangi
+    leftCell.appendParagraph(data.headmasterName || '[Nama Kepala Madrasah]').setAlignment(DocumentApp.HorizontalAlignment.CENTER).setBold(true).setUnderline(true);
+    leftCell.appendParagraph(`NIP. ${data.headmasterNip || '-'}`).setAlignment(DocumentApp.HorizontalAlignment.CENTER).setBold(false);
+    
+    // Kolom Kanan
+    const rightCell = signatureTable.getCell(0, 1);
+    rightCell.appendParagraph(data.placeDate || '').setAlignment(DocumentApp.HorizontalAlignment.CENTER).setSpacingBefore(20).setBold(false);
+    rightCell.appendParagraph('Guru Pengajar,').setAlignment(DocumentApp.HorizontalAlignment.CENTER).setSpacingAfter(60).setBold(false); // Spasi untuk TTD dikurangi
+    rightCell.appendParagraph(data.signatureName || '').setAlignment(DocumentApp.HorizontalAlignment.CENTER).setBold(true).setUnderline(true);
+    rightCell.appendParagraph(`NIP. ${data.signatureNip || '-'}`).setAlignment(DocumentApp.HorizontalAlignment.CENTER).setBold(false);
+
+    // 7. Simpan dan ekspor ke PDF
+    tempDoc.saveAndClose();
+    
+    const docFile = DriveApp.getFileById(tempDocId);
+    const pdfBlob = docFile.getAs('application/pdf');
+    const pdfData = Utilities.base64Encode(pdfBlob.getBytes());
+    
+    docFile.setTrashed(true);
+    
+    const fileName = `SPTJM_${data.name.replace(/\s/g, '_')}.pdf`;
+    return { success: true, pdfData, fileName };
+
+  } catch (e) {
+    Logger.log(`Error di generateSptjmPdf: ${e.toString()} \nStack: ${e.stack}`);
+    if (tempDocId) {
+       try { DriveApp.getFileById(tempDocId).setTrashed(true); } catch(err) {}
+    }
+    return { status: "error", message: `Gagal membuat PDF: ${e.message}` };
+  }
+}
