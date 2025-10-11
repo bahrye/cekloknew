@@ -326,6 +326,7 @@
           </div>
       </div>
       
+      <?!= include('sptjm_view'); ?>
       <?!= include('lkh_sptjm'); ?>
       <?!= include('sptjm_settings'); ?>
       </div>
@@ -438,6 +439,96 @@
             displayMessage('sptjm-settings-message', response.message);
           }
         }).saveSptjmSettings(currentUser.email, settings);
+      }
+
+      function showSptjmViewPage() {
+          document.getElementById('lkh-sptjm-dashboard-container').style.display = 'none';
+          document.getElementById('sptjm-view-container').style.display = 'block';
+
+          // Menampilkan pesan "Memuat..." saat data diambil
+          const fieldsToLoad = [
+              'sptjm-view-name', 'sptjm-view-nip', 'sptjm-view-jabatan', 'sptjm-view-satker', 
+              'sptjm-view-month', 'sptjm-view-headmaster-name', 'sptjm-view-headmaster-nip',
+              'sptjm-view-signature-name', 'sptjm-view-signature-nip'
+          ];
+          fieldsToLoad.forEach(id => document.getElementById(id).innerText = "Memuat...");
+          document.getElementById('sptjm-view-kop').src = "";
+
+
+          google.script.run
+              .withSuccessHandler(data => {
+                  if (data.error) {
+                      displayMessage('sptjm-download-message', data.error);
+                      return;
+                  }
+                  const settings = data.settings || {};
+                  const user = data.user || {};
+
+                  document.getElementById('sptjm-view-kop').src = settings.kopUrl || "https://via.placeholder.com/800x150.png?text=URL+Kop+Surat+Belum+Diatur";
+                  document.getElementById('sptjm-view-name').innerText = user.name || '-';
+                  document.getElementById('sptjm-view-nip').innerText = settings.nip || '-';
+                  document.getElementById('sptjm-view-jabatan').innerText = settings.jabatan || 'Guru';
+                  document.getElementById('sptjm-view-satker').innerText = user.school || '-'; 
+                  document.getElementById('sptjm-view-month').innerText = settings.bulan || '[Bulan]';
+
+                  const signatureDate = settings.tanggal ? new Date(settings.tanggal).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'UTC' }) : '[Tanggal]';
+                  document.getElementById('sptjm-view-place-date').innerText = `${settings.tempat || '[Tempat]'}, ${signatureDate}`;
+
+                  // Tanda tangan
+                  document.getElementById('sptjm-view-signature-name').innerText = user.name || '-';
+                  document.getElementById('sptjm-view-signature-nip').innerText = settings.nip || '-';
+                  document.getElementById('sptjm-view-headmaster-name').innerText = settings.namaKepala || '[Nama Kepala Madrasah]';
+                  document.getElementById('sptjm-view-headmaster-nip').innerText = settings.nipKepala || '-';
+              })
+              .withFailureHandler(err => {
+                  displayMessage('sptjm-download-message', `Error: ${err.message}`);
+              })
+              .getSptjmDataForUser(currentUser.email, selectedSchool);
+      }
+
+      function handleDownloadSptjmPdf() {
+          const button = document.getElementById('download-sptjm-pdf-button');
+          button.disabled = true;
+          button.textContent = 'Membuat PDF...';
+          displayMessage('sptjm-download-message', 'Sedang memproses & membuat PDF, mohon tunggu...', { isProcessing: true });
+
+          // Mengumpulkan semua data dari tampilan untuk dikirim ke server
+          const data = {
+              kopUrl: document.getElementById('sptjm-view-kop').src,
+              name: document.getElementById('sptjm-view-name').innerText,
+              nip: document.getElementById('sptjm-view-nip').innerText,
+              jabatan: document.getElementById('sptjm-view-jabatan').innerText,
+              satker: document.getElementById('sptjm-view-satker').innerText,
+              bulan: document.getElementById('sptjm-view-month').innerText,
+              placeDate: document.getElementById('sptjm-view-place-date').innerText,
+              signatureName: document.getElementById('sptjm-view-signature-name').innerText,
+              signatureNip: document.getElementById('sptjm-view-signature-nip').innerText,
+              headmasterName: document.getElementById('sptjm-view-headmaster-name').innerText,
+              headmasterNip: document.getElementById('sptjm-view-headmaster-nip').innerText
+          };
+
+          google.script.run
+              .withSuccessHandler(response => {
+                  if (response.success) {
+                      const link = document.createElement('a');
+                      link.href = `data:application/pdf;base64,${response.pdfData}`;
+                      link.download = response.fileName;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                      displayMessage('sptjm-download-message', 'PDF berhasil dibuat dan sedang diunduh!', { isSuccess: true });
+                  } else {
+                      displayMessage('sptjm-download-message', 'Error: ' + response.error);
+                  }
+                  button.disabled = false;
+                  button.textContent = 'Unduh PDF';
+              })
+              .withFailureHandler(error => {
+                  displayMessage('sptjm-download-message', 'Error: ' + error.message);
+                  button.disabled = false;
+                  button.textContent = 'Unduh PDF';
+              })
+              .generateSptjmPdf(data);
       }
 
       // ===================================================================
@@ -562,6 +653,7 @@
         document.getElementById("emis-export-container").style.display = "none";
         document.getElementById("lkh-sptjm-dashboard-container").style.display = "none";
         document.getElementById("sptjm-settings-container").style.display = "none";
+        document.getElementById("sptjm-view-container").style.display = "none";
         document.getElementById('email').value = "";
         document.getElementById('password').value = "";
         displayMessage('login-message', "Anda berhasil logout.", { isSuccess: true });
