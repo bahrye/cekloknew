@@ -7,7 +7,7 @@
   <body>
     <div class="container">
     
-    <div id="login-container">
+      <div id="login-container">
          <form id="login-form" onsubmit="event.preventDefault(); handleLogin();">
              <div class="card">
               <h2>Ceklok Guru, Staff & Admin</h2>
@@ -99,18 +99,23 @@
 
           <hr style="margin: 25px 0;">
 
-          <h3>CEKLOK</h3>
+          <h3>MENU UTAMA</h3>
           <div class="dashboard-actions" style="margin-top: 10px;">
             <button id="ceklok-button" class="action-button" onclick="showCeklokPage()">
               <span>Isi Ceklok Kehadiran</span>
             </button>
+            
+            <button id="lkh-sptjm-button" class="action-button" onclick="showLkhSptjmDashboard()" style="display:none;">
+              <span>LKH dan SPTJM</span>
+            </button>
+
             <button id="setting-libur-button" class="action-button secondary" onclick="showTeacherHolidaySettings()">
               <span>Setting Hari Libur Guru</span>
             </button>
           </div>
           
           <hr style="margin: 25px 0;">
-
+          
           <div id="emis-section">
               <h3>EMIS</h3>
               <div class="dashboard-actions" style="margin-top: 10px;">
@@ -197,6 +202,7 @@
           <button class="logout" onclick="handleLogout()">Logout</button>
         </div>
       </div>
+
       <div id="ceklok-container" style="display:none;">
         <div class="card">
           <button class="back-button" onclick="goBackToDashboard()">&larr; Kembali ke Dasbor</button>
@@ -319,7 +325,10 @@
               <button class="logout" onclick="handleLogout()">Logout</button>
           </div>
       </div>
-    </div>
+      
+      <?!= include('lkh_sptjm'); ?>
+      <?!= include('sptjm_settings'); ?>
+      </div>
     
     <div id="user-form-modal" class="modal">
       <div class="modal-content">
@@ -347,7 +356,7 @@
     
     <script>
       // ===================================================================
-      // VARIABEL GLOBAL
+      // VARIABEL GLOBAL & FUNGSI UTILITAS
       // ===================================================================
       let currentUser = null;
       let selectedSchool = null;
@@ -357,17 +366,6 @@
       let schoolTeachers = []; 
       const SPREADSHEET_ID = "1EIQY1DeGcwhEaYojbGMah-S5HbtsrON5YRy37bl_vLg";
 
-      // ===================================================================
-      // FUNGSI UTILITAS
-      // ===================================================================
-      /**
-       * Menampilkan pesan kepada pengguna.
-       * @param {string} elementId - ID elemen paragraf untuk menampilkan pesan.
-       * @param {string} text - Teks pesan yang akan ditampilkan.
-       * @param {object} options - Opsi untuk pesan.
-       * @param {boolean} [options.isSuccess=false] - Jika true, warna teks menjadi hijau (sukses).
-       * @param {boolean} [options.isProcessing=false] - Jika true, warna teks menjadi abu-abu dan pesan tidak akan hilang otomatis.
-       */
       function displayMessage(elementId, text, options = {}) {
         const { isSuccess = false, isProcessing = false } = options;
         const msgElem = document.getElementById(elementId);
@@ -381,17 +379,58 @@
             msgElem.style.color = 'var(--danger-color)';
           }
           
-          // Pesan proses akan tetap ada sampai diganti oleh pesan lain.
-          // Pesan sukses atau error akan hilang setelah 10 detik.
           if (!isProcessing) {
             setTimeout(() => {
-              // Hanya hapus pesan jika belum ada pesan baru yang muncul.
               if (msgElem.innerText === text) { 
                 msgElem.innerText = '';
               }
             }, 10000);
           }
         }
+      }
+
+      function openSptjmSettingsModal() {
+        // Panggil data yang tersimpan dan isi form
+        google.script.run.withSuccessHandler(settings => {
+          document.getElementById('sptjm-kop-url').value = settings.kopUrl || '';
+          document.getElementById('sptjm-nip').value = settings.nip || '';
+          document.getElementById('sptjm-jabatan').value = settings.jabatan || '';
+          document.getElementById('sptjm-kementerian').value = settings.kementerian || '';
+          document.getElementById('sptjm-bulan').value = settings.bulan || '';
+          document.getElementById('sptjm-tempat').value = settings.tempat || '';
+          document.getElementById('sptjm-tanggal').value = settings.tanggal || '';
+          
+          // Tampilkan modal setelah data dimuat
+          document.getElementById('sptjm-settings-modal').style.display = 'block';
+        }).getSptjmSettings();
+      }
+
+      function closeSptjmSettingsModal() {
+        document.getElementById('sptjm-settings-modal').style.display = 'none';
+        displayMessage('sptjm-settings-message', ''); // Bersihkan pesan
+      }
+
+      function handleSaveSptjmSettings() {
+        const settings = {
+          kopUrl: document.getElementById('sptjm-kop-url').value,
+          nip: document.getElementById('sptjm-nip').value,
+          jabatan: document.getElementById('sptjm-jabatan').value,
+          kementerian: document.getElementById('sptjm-kementerian').value,
+          bulan: document.getElementById('sptjm-bulan').value,
+          tempat: document.getElementById('sptjm-tempat').value,
+          tanggal: document.getElementById('sptjm-tanggal').value
+        };
+
+        displayMessage('sptjm-settings-message', 'Menyimpan...', { isProcessing: true });
+        
+        google.script.run.withSuccessHandler(response => {
+          if (response.status === 'success') {
+            displayMessage('sptjm-settings-message', response.message, { isSuccess: true });
+            setTimeout(closeSptjmSettingsModal, 2000); // Tutup modal setelah 2 detik
+          } else {
+            displayMessage('sptjm-settings-message', response.message);
+          }
+        }).saveSptjmSettings(settings);
       }
 
       // ===================================================================
@@ -514,6 +553,7 @@
         document.getElementById("teacher-holiday-settings-container").style.display = "none";
         document.getElementById("emis-import-container").style.display = "none";
         document.getElementById("emis-export-container").style.display = "none";
+        document.getElementById("lkh-sptjm-dashboard-container").style.display = "none";
         document.getElementById('email').value = "";
         document.getElementById('password').value = "";
         displayMessage('login-message', "Anda berhasil logout.", { isSuccess: true });
@@ -544,6 +584,7 @@
           document.getElementById("teacher-holiday-settings-container").style.display = "none";
           document.getElementById("emis-import-container").style.display = "none";
           document.getElementById("emis-export-container").style.display = "none";
+          document.getElementById("lkh-sptjm-dashboard-container").style.display = "none";
           document.getElementById("guru-dashboard-container").style.display = "block";
           
           const welcomeH2 = document.getElementById('guru-welcome-message');
@@ -555,6 +596,13 @@
             welcomeHTML += `<br><small>${selectedSchool}</small>`;
           }
           welcomeH2.innerHTML = welcomeHTML;
+          
+          const lkhButton = document.getElementById('lkh-sptjm-button');
+          if (currentUser.hasLKHFeature) {
+            lkhButton.style.display = 'flex';
+          } else {
+            lkhButton.style.display = 'none';
+          }
 
           google.script.run.withSuccessHandler(response => {
               renderAnnouncements(response.announcements);
@@ -594,9 +642,14 @@
         }
       }
 
+      function showLkhSptjmDashboard() {
+        document.getElementById("guru-dashboard-container").style.display = "none";
+        document.getElementById("lkh-sptjm-dashboard-container").style.display = "block";
+      }
+
       function showCeklokPage() {
         document.getElementById("guru-dashboard-container").style.display = "none";
-        document.getElementById("emis-import-container").style.display = "none"; // Baris ini ditambahkan
+        document.getElementById("emis-import-container").style.display = "none";
         document.getElementById("ceklok-container").style.display = "block";
         document.getElementById('ceklok-teacher-name').innerText = ''; 
         document.getElementById('ceklok-title').innerText = `Formulir Kehadiran - ${selectedSchool}`;
@@ -917,7 +970,6 @@
           const persentaseEl = document.getElementById('summary-persentase');
           const ceklokEl = document.getElementById('summary-ceklok');
 
-          // Set text values
           document.getElementById('summary-hari-kerja').innerText = summary.hariKerja;
           kehadiranEl.innerText = summary.kehadiran;
           alpaEl.innerText = summary.alpa;
@@ -925,7 +977,6 @@
           persentaseEl.innerText = summary.persentase + '%';
           ceklokEl.innerText = summary.ceklok;
 
-          // Atur warna untuk 'Hadir'
           if (parseInt(summary.persentase) === 100) {
               kehadiranEl.style.color = 'var(--success-color)';
           } else if (parseInt(summary.kehadiran) > 0) {
@@ -934,14 +985,12 @@
               kehadiranEl.style.color = 'var(--danger-color)';
           }
 
-          // Atur warna untuk 'Alpa'
           if (parseInt(summary.alpa) > 0) {
               alpaEl.style.color = 'var(--danger-color)';
           } else {
               alpaEl.style.color = 'var(--success-color)';
           }
 
-          // Atur warna untuk 'Persentase' dan 'Ceklok'
           const percentage = parseInt(summary.persentase);
           let persentaseColor;
           if (percentage === 100) {
@@ -1224,7 +1273,7 @@
           if (!selectedTeacherForStaff) return;
           
           document.getElementById("staff-dashboard-container").style.display = "none";
-          document.getElementById("emis-import-container").style.display = "none"; // Baris ini ditambahkan
+          document.getElementById("emis-import-container").style.display = "none";
           document.getElementById("ceklok-container").style.display = "block";
           document.getElementById('ceklok-title').innerText = `Formulir Kehadiran - ${selectedTeacherForStaff.school}`;
           document.getElementById('ceklok-teacher-name').innerText = `Untuk: ${selectedTeacherForStaff.name}`;
