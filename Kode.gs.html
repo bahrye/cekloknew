@@ -57,13 +57,6 @@ function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
-// --- FUNGSI BARU UNTUK CEK AKSES LKH ---
-function checkIfLKHUser_(email) {
-  if (!email || !lkhUsersSheet) return false;
-  const lkhUsers = lkhUsersSheet.getRange("A:A").getValues().flat();
-  return lkhUsers.some(userEmail => userEmail.toLowerCase() === email.toLowerCase());
-}
-
 function checkIfAdmin(email) {
   if (!email) return false;
   const users = usersSheet.getDataRange().getValues();
@@ -674,7 +667,14 @@ function addUser(adminEmail, userData) {
   if (emailExists) {
     return { status: "error", message: "Email sudah terdaftar." };
   }
-  usersSheet.appendRow([userData.email, userData.password, userData.name, userData.school, userData.role]);
+  // PERBAIKAN: Paksa semua nilai menjadi teks dengan (')
+  usersSheet.appendRow([
+    "'" + userData.email, 
+    "'" + userData.password, 
+    "'" + userData.name, 
+    "'" + userData.school, 
+    "'" + userData.role
+  ]);
   return { status: "success", message: "User berhasil ditambah." };
 }
 
@@ -683,7 +683,15 @@ function updateUser(adminEmail, userData) {
   const users = usersSheet.getDataRange().getValues();
   for (let i = 1; i < users.length; i++) {
     if (users[i][0] === userData.originalEmail) {
-      usersSheet.getRange(i + 1, 1, 1, 5).setValues([[userData.email, userData.password, userData.name, userData.school, userData.role]]);
+      const range = usersSheet.getRange(i + 1, 1, 1, 5);
+      // PERBAIKAN: Paksa semua nilai menjadi teks dengan (')
+      range.setValues([[
+        "'" + userData.email, 
+        "'" + userData.password, 
+        "'" + userData.name, 
+        "'" + userData.school, 
+        "'" + userData.role
+      ]]);
       return { status: "success", message: "User berhasil diperbarui." };
     }
   }
@@ -874,24 +882,106 @@ function setupDailyTrigger() {
   Logger.log('Trigger harian untuk pengingat email berhasil dibuat.');
 }
 
-function saveSptjmSettings(settings) {
+// --- BLOK FUNGSI PENGATURAN LKH & SPTJM (VERSI FINAL) ---
+
+function getLKHUsersSheet_() {
+  let sheet = ss.getSheetByName("LKHUsers");
+  if (!sheet) {
+    sheet = ss.insertSheet("LKHUsers");
+    sheet.appendRow(["Email", "kopUrl", "nip", "jabatan", "kementerian", "namaKepala", "nipKepala", "bulan", "tempat", "tanggal"]);
+    SpreadsheetApp.flush();
+    // PERBAIKAN: Memformat seluruh kolom sebagai Teks saat sheet dibuat
+    sheet.getRange("A:J").setNumberFormat("@");
+  }
+  return sheet;
+}
+
+function checkIfLKHUser_(email) {
+  const lkhUsersSheet = getLKHUsersSheet_();
+  if (!email || !lkhUsersSheet || lkhUsersSheet.getLastRow() < 1) return false;
+  const lkhUsers = lkhUsersSheet.getRange("A:A").getValues().flat();
+  return lkhUsers.some(userEmail => String(userEmail).toLowerCase() === email.toLowerCase());
+}
+
+function getSptjmSettings(userEmail) {
   try {
-    const userProperties = PropertiesService.getUserProperties();
-    userProperties.setProperty('sptjmSettings', JSON.stringify(settings));
-    return { status: "success", message: "Pengaturan berhasil disimpan." };
+    const lkhUsersSheet = getLKHUsersSheet_();
+    if (!userEmail || !checkIfLKHUser_(userEmail)) {
+        return {}; // Kembalikan objek kosong jika user tidak valid
+    }
+
+    const data = lkhUsersSheet.getDataRange().getValues();
+    const headers = data[0].map(h => String(h).trim()); // Ambil header dari baris pertama
+    const emailIndex = headers.indexOf("Email");
+
+    if (emailIndex === -1) {
+      throw new Error("Kolom 'Email' tidak ditemukan di sheet LKHUsers.");
+    }
+
+    // Loop mulai dari baris kedua (data aktual)
+    for (let i = 1; i < data.length; i++) {
+        // Cocokkan email (case-insensitive)
+        if (String(data[i][emailIndex]).toLowerCase() === userEmail.toLowerCase()) {
+            const userRow = data[i];
+            let userSettings = {};
+            // Bangun objek 'userSettings' berdasarkan header
+            headers.forEach((header, index) => {
+                if (header) { // Pastikan header tidak kosong
+                    // Jika data berupa tanggal, format dengan benar
+                    if (userRow[index] instanceof Date) {
+                        userSettings[header] = Utilities.formatDate(userRow[index], "GMT", "yyyy-MM-dd");
+                    } else {
+                        userSettings[header] = userRow[index];
+                    }
+                }
+            });
+            return userSettings; // Kembalikan data yang ditemukan
+        }
+    }
+    return {}; // Jika email tidak ditemukan, kembalikan objek kosong
   } catch (e) {
-    Logger.log("Error di saveSptjmSettings: " + e.toString());
-    return { status: "error", message: "Gagal menyimpan pengaturan: " + e.message };
+    Logger.log(`Error di getSptjmSettings: ${e.toString()}`);
+    throw new Error(`Error di server saat memuat pengaturan: ${e.message}`);
   }
 }
 
-function getSptjmSettings() {
+function saveSptjmSettings(userEmail, settings) {
   try {
-    const userProperties = PropertiesService.getUserProperties();
-    const settings = userProperties.getProperty('sptjmSettings');
-    return settings ? JSON.parse(settings) : {};
+    const lkhUsersSheet = getLKHUsersSheet_();
+    if (!checkIfLKHUser_(userEmail)) {
+        return { status: "error", message: "Anda tidak memiliki akses LKH." };
+    }
+    const data = lkhUsersSheet.getDataRange().getValues();
+    const headers = data[0].map(h => String(h).trim());
+    const emailIndex = headers.indexOf("Email");
+    if (emailIndex === -1) throw new Error("Kolom 'Email' tidak ditemukan.");
+
+    // PERBAIKAN FINAL: Paksa semua nilai menjadi teks dengan menambahkan (') di depannya
+    const valuesToSave = headers.map(header => {
+        // Jangan tambahkan kutip pada email, tapi tambahkan pada semua field lain
+        if (header.toLowerCase() !== 'email') {
+            // Jika ada nilai, tambahkan kutip di depannya
+            return settings[header] ? "'" + settings[header] : "";
+        }
+        // Untuk email, gunakan nilai asli tanpa modifikasi
+        return userEmail;
+    });
+
+    let userRowIndex = -1;
+    for (let i = 1; i < data.length; i++) {
+        if (String(data[i][emailIndex]).toLowerCase() === userEmail.toLowerCase()) {
+            userRowIndex = i + 1;
+            break;
+        }
+    }
+    if (userRowIndex > 0) {
+        lkhUsersSheet.getRange(userRowIndex, 1, 1, valuesToSave.length).setValues([valuesToSave]);
+    } else {
+        lkhUsersSheet.appendRow(valuesToSave);
+    }
+    return { status: "success", message: "Pengaturan berhasil disimpan." };
   } catch (e) {
-    Logger.log("Error di getSptjmSettings: " + e.toString());
-    return {};
+    Logger.log(`Error di saveSptjmSettings: ${e.toString()}`);
+    return { status: "error", message: `Gagal menyimpan pengaturan: ${e.message}` };
   }
 }
