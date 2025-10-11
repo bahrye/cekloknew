@@ -1010,22 +1010,25 @@ function getSptjmDataForUser(email, school) {
 }
 
 function generateSptjmPdf(data) {
-  // --- 1. Tentukan ID Template Berdasarkan Nama Sekolah ---
-  const templateIds = {
-    'MTS TANUNTUNG': '1cSPnqi9sfgoVXh-V9ePLNbdrMgP3D4AeU7kokHhYxro',
-    'MIS BUTUNG': '1TEw6NM4lXD-2dDBk3wL3ihuLYvuiwofvahAMhMm19yo'
-  };
-  
-  // Cari nama sekolah yang cocok di dalam data.satker
-  const schoolName = Object.keys(templateIds).find(name => (data.satker || "").includes(name));
-  const templateId = schoolName ? templateIds[schoolName] : null;
-
-  if (!templateId) {
-    return { success: false, error: `Template untuk sekolah "${data.satker}" tidak ditemukan.` };
-  }
+  // Menambahkan lock untuk memastikan hanya satu proses berjalan pada satu waktu
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000); // Menunggu hingga 30 detik jika ada proses lain
 
   let tempFileId = null;
   try {
+    // --- 1. Tentukan ID Template Berdasarkan Nama Sekolah ---
+    const templateIds = {
+      'MTS TANUNTUNG': '1cSPnqi9sfgoVXh-V9ePLNbdrMgP3D4AeU7kokHhYxro',
+      'MIS BUTUNG': '1TEw6NM4lXD-2dDBk3wL3ihuLYvuiwofvahAMhMm19yo'
+    };
+    
+    const schoolName = Object.keys(templateIds).find(name => (data.satker || "").includes(name));
+    const templateId = schoolName ? templateIds[schoolName] : null;
+
+    if (!templateId) {
+      return { success: false, error: `Template untuk sekolah "${data.satker}" tidak ditemukan.` };
+    }
+
     // --- 2. Salin File Template ---
     const originalFile = DriveApp.getFileById(templateId);
     const newFileName = `SPTJM_${data.name.replace(/\s/g, '_')}_${new Date().getTime()}`;
@@ -1043,9 +1046,7 @@ function generateSptjmPdf(data) {
     body.replaceText('{{BULAN}}', data.bulan || '-');
     body.replaceText('{{TEMPAT_TANGGAL}}', data.placeDate || '-');
     body.replaceText('{{NAMA_KEPALA}}', data.headmasterName || '-');
-    body.replaceText('{{NIP_KEPALA}}', data.headmasterNip || '-');
-    
-    // Untuk bagian tanda tangan, gunakan placeholder yang sama atau berbeda
+    body.replaceText('{{NIP_KEPALA}}', data.nipKepala || '-');
     body.replaceText('{{NAMA_TTD}}', data.signatureName || data.name || '-');
     body.replaceText('{{NIP_TTD}}', data.signatureNip || data.nip || '-');
 
@@ -1071,5 +1072,7 @@ function generateSptjmPdf(data) {
         Logger.log(`Gagal menghapus file sementara: ${err.message}`);
       }
     }
+    // --- 6. Pastikan untuk selalu melepaskan lock ---
+    lock.releaseLock();
   }
 }
