@@ -1,7 +1,7 @@
-<div id="sptjm-settings-modal" class="modal">
-  <div class="modal-content">
-    <span class="close-btn" onclick="closeSptjmSettingsModal()">&times;</span>
-    <h3 id="form-title">Pengaturan Cetak SPTJM</h3>
+<div id="sptjm-settings-container" style="display:none;">
+  <div class="card">
+    <button class="back-button" onclick="showLkhSptjmDashboard()">&larr; Kembali</button>
+    <h2 style="margin-top: 15px;">Pengaturan Cetak SPTJM</h2>
     <p>Pengaturan ini akan disimpan untuk akun Anda dan digunakan saat membuat dokumen SPTJM.</p>
 
     <div class="input-group">
@@ -28,6 +28,16 @@
       <input type="text" id="sptjm-kementerian" placeholder="Contoh: Kementerian Agama Kab. Bulukumba">
     </div>
     
+    <div class="input-group">
+        <label for="sptjm-nama-kepala">Nama Kepala Madrasah</label>
+        <input type="text" id="sptjm-nama-kepala" placeholder="Contoh: Drs. H. Muhammad, M.Pd.">
+    </div>
+
+    <div class="input-group">
+        <label for="sptjm-nip-kepala">NIP Kepala Madrasah</label>
+        <input type="text" id="sptjm-nip-kepala" placeholder="Contoh: 196801011998031001">
+    </div>
+
     <div class="input-group">
       <label for="sptjm-bulan">Bulan dalam Isi Surat</label>
       <input type="text" id="sptjm-bulan" placeholder="Contoh: September">
