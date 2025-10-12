@@ -2039,9 +2039,9 @@
         const button = document.getElementById('apply-weekly-data-button');
         button.disabled = true;
         button.textContent = 'Mengambil data...';
-        displayMessage('lkh-message', 'Mengambil data mingguan...', { isProcessing: true });
+        // Mengarahkan pesan ke elemen baru di sebelah tombol
+        displayMessage('apply-weekly-data-message', 'Mengambil data mingguan...', { isProcessing: true });
 
-        // Memanggil fungsi yang sudah ada untuk mendapatkan data mingguan
         google.script.run
           .withSuccessHandler(response => {
             if (response.success && response.existingData) {
@@ -2053,14 +2053,11 @@
                 const date = row.dataset.date;
                 if (!date) return;
                 
-                // Mendapatkan nama hari dari sel pertama di baris
                 const dayNameCell = row.querySelector('td');
                 if (!dayNameCell) return;
 
-                // Contoh isi sel: "Senin, 01 Oktober 2025"
                 const dayName = dayNameCell.innerText.split(',')[0].trim();
 
-                // Jika ada template untuk hari tersebut di data mingguan
                 if (weeklyData[dayName]) {
                   const template = weeklyData[dayName];
                   
@@ -2068,17 +2065,14 @@
                   const hasilTextarea = document.getElementById(`hasil-${date}`);
                   const volTextarea = document.getElementById(`vol-${date}`);
 
-                  // Cek apakah kolom Uraian kosong, jika ya, isi dengan data template
                   if (uraianTextarea && uraianTextarea.value.trim() === '') {
                     uraianTextarea.value = template.uraian || '';
                     fieldsApplied++;
                   }
-                  // Cek apakah kolom Hasil kosong, jika ya, isi dengan data template
                   if (hasilTextarea && hasilTextarea.value.trim() === '') {
                     hasilTextarea.value = template.hasil || '';
                     fieldsApplied++;
                   }
-                   // Cek apakah kolom Vol kosong, jika ya, isi dengan data template
                    if (volTextarea && volTextarea.value.trim() === '') {
                     volTextarea.value = template.vol || '';
                     fieldsApplied++;
@@ -2087,19 +2081,23 @@
               });
 
               if (fieldsApplied > 0) {
-                 displayMessage('lkh-message', `Data mingguan berhasil diterapkan.`, { isSuccess: true });
+                 // Menampilkan pesan sukses di sebelah tombol
+                 displayMessage('apply-weekly-data-message', `Data mingguan berhasil diterapkan.`, { isSuccess: true });
               } else {
-                 displayMessage('lkh-message', 'Semua isian sudah terisi.', { isSuccess: true });
+                 // Menampilkan pesan "semua terisi" di sebelah tombol
+                 displayMessage('apply-weekly-data-message', 'Semua isian sudah terisi.', { isSuccess: true });
               }
 
             } else {
-              displayMessage('lkh-message', 'Gagal mengambil data mingguan atau tidak ada data tersimpan.');
+              // Menampilkan pesan gagal di sebelah tombol
+              displayMessage('apply-weekly-data-message', 'Gagal mengambil data mingguan atau tidak ada data tersimpan.');
             }
             button.disabled = false;
             button.textContent = 'Ambil Data Mingguan';
           })
           .withFailureHandler(error => {
-            displayMessage('lkh-message', 'Error: ' + error.message);
+            // Menampilkan pesan error di sebelah tombol
+            displayMessage('apply-weekly-data-message', 'Error: ' + error.message);
             button.disabled = false;
             button.textContent = 'Ambil Data Mingguan';
           })
