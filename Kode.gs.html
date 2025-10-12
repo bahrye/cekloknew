@@ -1076,3 +1076,57 @@ function generateSptjmPdf(data) {
     lock.releaseLock();
   }
 }
+
+function getLKHSheet_(year, month) {
+  const monthStr = String(month).padStart(2, '0');
+  const yearStr = String(year);
+  const sheetName = `LKH_${monthStr}_${yearStr}`;
+  
+  let sheet = ss.getSheetByName(sheetName);
+  
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+    const headers = [
+      "Email", "Sekolah", "Tanggal", "Uraian Kegiatan", "Hasil/Output", "Vol"
+    ];
+    sheet.appendRow(headers);
+    sheet.setFrozenRows(1);
+  }
+  
+  return sheet;
+}
+
+function getLKHData(email, school, year, month) {
+  try {
+    const holidaysData = holidaysSheet.getDataRange().getValues().slice(1);
+    const nationalHolidays = {};
+    holidaysData.forEach(row => {
+      if (row[0] instanceof Date && row[1]) {
+        nationalHolidays[Utilities.formatDate(row[0], "GMT", "yyyy-MM-dd")] = row[1];
+      }
+    });
+
+    const attendanceData = getMonthlyAttendance(email, school, year, month);
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const workingDays = [];
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateObj = new Date(Date.UTC(year, month - 1, day));
+      const dateStr = Utilities.formatDate(dateObj, "GMT", "yyyy-MM-dd");
+      const dayOfWeek = dateObj.getUTCDay();
+      const entry = attendanceData[dateStr];
+
+      if (dayOfWeek !== 0 && !nationalHolidays[dateStr] && (!entry || !entry.reason)) {
+        workingDays.push({
+          date: dateStr,
+          dayName: dateObj.toLocaleString('id-ID', { weekday: 'long', timeZone: 'UTC' }),
+          formattedDate: Utilities.formatDate(dateObj, "GMT", "dd MMMM yyyy")
+        });
+      }
+    }
+    return { success: true, workingDays };
+  } catch (e) {
+    Logger.log("Error di getLKHData: " + e.message);
+    return { success: false, error: e.message };
+  }
+}
