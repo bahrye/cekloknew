@@ -1077,24 +1077,20 @@ function generateSptjmPdf(data) {
   }
 }
 
-function getLKHSheet_(year, month) {
-  const monthStr = String(month).padStart(2, '0');
-  const yearStr = String(year);
-  const sheetName = `LKH_${monthStr}_${yearStr}`;
-  
+function getLKHSheetForUser_(userName) {
+  const sanitizedName = userName.replace(/[^a-zA-Z0-9]/g, '_');
+  const sheetName = `LKH_${sanitizedName}`;
   let sheet = ss.getSheetByName(sheetName);
-  
   if (!sheet) {
     sheet = ss.insertSheet(sheetName);
-    const headers = [
-      "Email", "Sekolah", "Tanggal", "Uraian Kegiatan", "Hasil/Output", "Vol"
-    ];
+    const headers = ["Tanggal", "Uraian Kegiatan", "Hasil/Output", "Vol", "Sekolah"];
     sheet.appendRow(headers);
+    sheet.getRange("A:A").setNumberFormat("yyyy-mm-dd");
     sheet.setFrozenRows(1);
   }
-  
   return sheet;
 }
+
 
 function getLKHData(email, school, year, month) {
   try {
@@ -1120,13 +1116,83 @@ function getLKHData(email, school, year, month) {
         workingDays.push({
           date: dateStr,
           dayName: dateObj.toLocaleString('id-ID', { weekday: 'long', timeZone: 'UTC' }),
-          formattedDate: Utilities.formatDate(dateObj, "GMT", "dd MMMM yyyy")
+          formattedDate: dateObj.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'UTC' })
         });
       }
     }
-    return { success: true, workingDays };
+    
+    // Get existing LKH data
+    const users = usersSheet.getDataRange().getValues();
+    const userRow = users.find(u => u[0].toLowerCase() === email.toLowerCase());
+    const userName = userRow ? userRow[2] : email;
+    const lkhSheet = getLKHSheetForUser_(userName);
+    const lkhData = lkhSheet.getDataRange().getValues().slice(1);
+    const existingData = {};
+    const monthStr = `${year}-${String(month).padStart(2, '0')}`;
+    
+    lkhData.forEach(row => {
+      const rowDate = Utilities.formatDate(new Date(row[0]), "GMT", "yyyy-MM-dd");
+      if(rowDate.startsWith(monthStr)) {
+        existingData[rowDate] = {
+          uraian: row[1] || "",
+          hasil: row[2] || "",
+          vol: row[3] || ""
+        };
+      }
+    });
+
+    return { success: true, workingDays, existingData };
   } catch (e) {
     Logger.log("Error di getLKHData: " + e.message);
     return { success: false, error: e.message };
+  }
+}
+
+function saveLKHData(email, school, year, month, lkhData) {
+  try {
+    const users = usersSheet.getDataRange().getValues();
+    const userRow = users.find(u => u[0].toLowerCase() === email.toLowerCase());
+    if (!userRow) throw new Error("User not found");
+    const userName = userRow[2];
+    
+    const sheet = getLKHSheetForUser_(userName);
+    const allData = sheet.getDataRange().getValues();
+    
+    const monthStr = `${year}-${String(month).padStart(2, '0')}`;
+    const rowsToDelete = [];
+    
+    for (let i = 1; i < allData.length; i++) {
+      const rowDate = Utilities.formatDate(new Date(allData[i][0]), "GMT", "yyyy-MM-dd");
+      if (rowDate.startsWith(monthStr)) {
+        rowsToDelete.push(i + 1);
+      }
+    }
+
+    if (rowsToDelete.length > 0) {
+      rowsToDelete.sort((a, b) => b - a).forEach(rowIndex => sheet.deleteRow(rowIndex));
+    }
+    
+    const rowsToInsert = [];
+    for (const date in lkhData) {
+      const entry = lkhData[date];
+      if (entry.uraian || entry.hasil || entry.vol) {
+        rowsToInsert.push([
+          new Date(date),
+          entry.uraian,
+          entry.hasil,
+          entry.vol,
+          school
+        ]);
+      }
+    }
+    
+    if (rowsToInsert.length > 0) {
+      sheet.getRange(sheet.getLastRow() + 1, 1, rowsToInsert.length, 5).setValues(rowsToInsert);
+    }
+
+    return { status: "success", message: "LKH berhasil disimpan." };
+  } catch (e) {
+    Logger.log(`Error in saveLKHData: ${e.message}`);
+    return { status: "error", message: `Gagal menyimpan LKH: ${e.message}` };
   }
 }
