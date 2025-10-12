@@ -392,28 +392,31 @@
       }
 
       function showSptjmSettingsPage() {
-        document.getElementById('lkh-sptjm-dashboard-container').style.display = 'none';
-        document.getElementById('sptjm-settings-container').style.display = 'block';
+          document.getElementById('lkh-sptjm-dashboard-container').style.display = 'none';
+          document.getElementById('sptjm-settings-container').style.display = 'block';
 
-        google.script.run
-          .withSuccessHandler(settings => {
-            if (settings) { 
-              // Baris yang menyebabkan error telah dihapus
-              document.getElementById('sptjm-nip').value = settings.nip || '';
-              document.getElementById('sptjm-jabatan').value = settings.jabatan || '';
-              document.getElementById('sptjm-bulan').value = settings.bulan || '';
-              document.getElementById('sptjm-tempat').value = settings.tempat || '';
-              document.getElementById('sptjm-tanggal').value = settings.tanggal || '';
-              document.getElementById('sptjm-nama-kepala').value = settings.namaKepala || '';
-              document.getElementById('sptjm-nip-kepala').value = settings.nipKepala || '';
-            }
-          })
-          .withFailureHandler(error => {
-              // Menampilkan pesan error yang lebih spesifik dari server
-              displayMessage('sptjm-settings-message', error.message);
-              console.error('Error saat memuat pengaturan:', error);
-          })
-          .getSptjmSettings(currentUser.email);
+          const saveButton = document.getElementById('save-sptjm-settings-button');
+          saveButton.disabled = true; // Nonaktifkan tombol saat halaman dibuka
+
+          google.script.run
+            .withSuccessHandler(settings => {
+              if (settings) { 
+                document.getElementById('sptjm-nip').value = settings.nip || '';
+                document.getElementById('sptjm-jabatan').value = settings.jabatan || '';
+                document.getElementById('sptjm-bulan').value = settings.bulan || '';
+                document.getElementById('sptjm-tempat').value = settings.tempat || '';
+                document.getElementById('sptjm-tanggal').value = settings.tanggal || '';
+                document.getElementById('sptjm-nama-kepala').value = settings.namaKepala || '';
+                document.getElementById('sptjm-nip-kepala').value = settings.nipKepala || '';
+              }
+              saveButton.disabled = false; // Aktifkan tombol setelah data dimuat
+            })
+            .withFailureHandler(error => {
+                displayMessage('sptjm-settings-message', error.message);
+                console.error('Error saat memuat pengaturan:', error);
+                // Tombol tetap nonaktif jika gagal
+            })
+            .getSptjmSettings(currentUser.email);
       }
 
       function handleSaveSptjmSettings() {
@@ -1735,33 +1738,40 @@
       }
 
       function generateLkhForm(year, month) {
-        const container = document.getElementById('lkh-table-container');
-        container.innerHTML = '<p>Memuat formulir LKH...</p>';
-        google.script.run
-          .withSuccessHandler(response => {
-            if (response.success) {
-              renderLkhTable(response.workingDays, year, month);
-            } else {
-              container.innerHTML = `<p style="color: var(--danger-color);">Gagal memuat data: ${response.error}</p>`;
-            }
-          })
-          .withFailureHandler(err => {
-            container.innerHTML = `<p style="color: var(--danger-color);">Gagal memuat: ${err.message}</p>`;
-          })
-          .getLKHData(currentUser.email, selectedSchool, year, month);
+          const container = document.getElementById('lkh-table-container');
+          const saveButton = document.getElementById('save-lkh-button');
+          container.innerHTML = '<p>Memuat formulir LKH...</p>';
+          saveButton.disabled = true; // Pastikan tombol nonaktif saat memuat
+
+          google.script.run
+            .withSuccessHandler(response => {
+              if (response.success) {
+                renderLkhTable(response.workingDays, response.existingData);
+                saveButton.disabled = false; // Aktifkan tombol setelah data berhasil dirender
+              } else {
+                container.innerHTML = `<p style="color: var(--danger-color);">Gagal memuat data: ${response.error}</p>`;
+                // Tombol tetap nonaktif jika gagal
+              }
+            })
+            .withFailureHandler(err => {
+              container.innerHTML = `<p style="color: var(--danger-color);">Gagal memuat: ${err.message}</p>`;
+              // Tombol tetap nonaktif jika gagal
+            })
+            .getLKHData(currentUser.email, selectedSchool, year, month);
       }
 
-      function renderLkhTable(workingDays, year, month) {
+      function renderLkhTable(workingDays, existingData) {
         const container = document.getElementById('lkh-table-container');
         let tableHTML = '<table><thead><tr><th>HARI / TANGGAL</th><th>URAIAN KEGIATAN</th><th>HASIL / OUTPUT</th><th>VOL</th></tr></thead><tbody>';
         if (workingDays && workingDays.length > 0) {
           workingDays.forEach(day => {
+            const data = existingData[day.date] || {};
             tableHTML += `
               <tr data-date="${day.date}">
                 <td>${day.dayName}, ${day.formattedDate}</td>
-                <td><textarea rows="3" id="uraian-${day.date}"></textarea></td>
-                <td><textarea rows="3" id="hasil-${day.date}"></textarea></td>
-                <td><input type="text" id="vol-${day.date}"></td>
+                <td><textarea rows="3" id="uraian-${day.date}">${data.uraian || ''}</textarea></td>
+                <td><textarea rows="3" id="hasil-${day.date}">${data.hasil || ''}</textarea></td>
+                <td><textarea id="vol-${day.date}">${data.vol || ''}</textarea></td>
               </tr>
             `;
           });
@@ -1771,6 +1781,46 @@
         tableHTML += '</tbody></table>';
         container.innerHTML = tableHTML;
       }
+      
+      function handleSaveLKH() {
+        const button = document.getElementById('save-lkh-button');
+        button.disabled = true;
+        button.textContent = "Menyimpan...";
+        displayMessage('lkh-message', 'Menyimpan data LKH...', { isProcessing: true });
+        
+        const monthInputValue = document.getElementById('lkh-month-input').value;
+        const [year, month] = monthInputValue.split('-').map(Number);
+        const lkhData = {};
+        const rows = document.querySelectorAll('#lkh-table-container tbody tr');
+        
+        rows.forEach(row => {
+          const date = row.dataset.date;
+          if (date) {
+            const uraian = document.getElementById(`uraian-${date}`).value;
+            const hasil = document.getElementById(`hasil-${date}`).value;
+            const vol = document.getElementById(`vol-${date}`).value;
+            lkhData[date] = { uraian, hasil, vol };
+          }
+        });
+
+        google.script.run
+          .withSuccessHandler(response => {
+            if(response.status === 'success') {
+              displayMessage('lkh-message', response.message, { isSuccess: true });
+            } else {
+              displayMessage('lkh-message', response.message);
+            }
+            button.disabled = false;
+            button.textContent = "Simpan LKH";
+          })
+          .withFailureHandler(error => {
+            displayMessage('lkh-message', 'Error: ' + error.message);
+            button.disabled = false;
+            button.textContent = "Simpan LKH";
+          })
+          .saveLKHData(currentUser.email, selectedSchool, year, month, lkhData);
+      }
+
     </script>
   </body>
 </html>
