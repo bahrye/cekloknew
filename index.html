@@ -204,20 +204,20 @@
       </div>
 
       <div id="ceklok-container" style="display:none;">
-        <div class="card">
-          <button class="back-button" onclick="goBackToDashboard()">&larr; Kembali ke Dasbor</button>
-          <h2 style="margin-top: 15px;" id="ceklok-title">Formulir Kehadiran</h2>
-          <h3 id="ceklok-teacher-name" style="margin-top: -10px; margin-bottom: 15px; font-weight: 500; color: var(--text-secondary-color);"></h3>
-          <div id="global-lock-message" class="message" style="color: #b91c1c; margin-bottom: 15px;"></div>
-          <div class="month-navigator">
-            <button onclick="changeMonth(-1)">&#9664; Bulan Lalu</button>
-            <h3 id="month-display"></h3>
-            <button onclick="changeMonth(1)">Bulan Depan &#9654;</button>
+          <div class="card">
+            <button class="back-button" onclick="goBackToDashboard()">&larr; Kembali ke Dasbor</button>
+            <h2 style="margin-top: 15px;" id="ceklok-title">Formulir Kehadiran</h2>
+            <h3 id="ceklok-teacher-name" style="margin-top: -10px; margin-bottom: 15px; font-weight: 500; color: var(--text-secondary-color);"></h3>
+            <div id="global-lock-message" class="message" style="color: #b91c1c; margin-bottom: 15px;"></div>
+            <div class="month-navigator">
+              <button onclick="changeMonth(-1)">&#9664; Bulan Lalu</button>
+              <h3 id="month-display"></h3>
+              <button onclick="changeMonth(1)">Bulan Depan &#9654;</button>
+            </div>
+            <div id="attendance-table-container"></div>
+            <button id="save-button" onclick="handleSave()" disabled>Simpan Semua Perubahan</button>
+            <p id="save-message" class="message"></p>
           </div>
-          <div id="attendance-table-container"></div>
-          <button id="save-button" onclick="handleSave()">Simpan Semua Perubahan</button>
-          <p id="save-message" class="message"></p>
-        </div>
       </div>
       
       <div id="teacher-holiday-settings-container" style="display:none;">
@@ -804,19 +804,27 @@
       }
 
       function loadMonthData(date){
-         const year = date.getFullYear();
-         const month = date.getMonth() + 1;
-         const userEmail = (currentUser.role === 'staff' && selectedTeacherForStaff) ? selectedTeacherForStaff.email : currentUser.email;
-         const schoolForCall = (currentUser.role === 'staff' && selectedTeacherForStaff) ? selectedTeacherForStaff.school : selectedSchool;
+          const year = date.getFullYear();
+          const month = date.getMonth() + 1;
+          const userEmail = (currentUser.role === 'staff' && selectedTeacherForStaff) ? selectedTeacherForStaff.email : currentUser.email;
+          const schoolForCall = (currentUser.role === 'staff' && selectedTeacherForStaff) ? selectedTeacherForStaff.school : selectedSchool;
+          const saveButton = document.getElementById('save-button'); // Ambil elemen tombol
 
-         document.getElementById('month-display').innerText = date.toLocaleString('id-ID', { month: 'long', year: 'numeric' });
-         document.getElementById('attendance-table-container').innerHTML = '<div>Memuat data...</div>';
-         google.script.run
-          .withSuccessHandler(response => {
-            appSettings = response;
-            generateMonthTable(year, month, response.attendance);
-          })
-          .getAppSettingsForUser(userEmail, schoolForCall, year, month);
+          document.getElementById('month-display').innerText = date.toLocaleString('id-ID', { month: 'long', year: 'numeric' });
+          document.getElementById('attendance-table-container').innerHTML = '<div>Memuat data...</div>';
+          saveButton.disabled = true; // Nonaktifkan tombol saat data mulai dimuat
+
+          google.script.run
+            .withSuccessHandler(response => {
+              appSettings = response;
+              generateMonthTable(year, month, response.attendance);
+              // Tombol akan diaktifkan kembali oleh fungsi generateMonthTable jika bulan tidak dikunci
+            })
+            .withFailureHandler(error => {
+                // Jika gagal memuat, tombol tetap nonaktif
+                document.getElementById('attendance-table-container').innerHTML = `<p style="color: var(--danger-color);">Gagal memuat data absensi.</p>`;
+            })
+            .getAppSettingsForUser(userEmail, schoolForCall, year, month);
       }
 
       function generateMonthTable(year, month, attendanceData) {
