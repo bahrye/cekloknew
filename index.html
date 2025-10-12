@@ -331,6 +331,7 @@
       <?!= include('sptjm_settings'); ?>
       <?!= include('lkh'); ?>
       <?!= include('lkh_view'); ?>
+      <?!= include('lkh_weekly'); ?>
       </div>
     
     <div id="user-form-modal" class="modal">
@@ -540,6 +541,93 @@
               .generateSptjmPdf(data);
       }
 
+      function showLkhWeeklyPage() {
+        document.getElementById("lkh-sptjm-dashboard-container").style.display = "none";
+        document.getElementById("lkh-weekly-container").style.display = "block";
+        generateLkhWeeklyForm();
+      }
+
+      function generateLkhWeeklyForm() {
+          const container = document.getElementById('lkh-weekly-table-container');
+          const saveButton = document.getElementById('save-lkh-weekly-button');
+          container.innerHTML = '<p>Memuat formulir LKH mingguan...</p>';
+          saveButton.disabled = true;
+
+          google.script.run
+            .withSuccessHandler(response => {
+              if (response.success) {
+                renderLkhWeeklyTable(response.existingData);
+                saveButton.disabled = false;
+              } else {
+                container.innerHTML = `<p style="color: var(--danger-color);">Gagal memuat data: ${response.error}</p>`;
+              }
+            })
+            .withFailureHandler(err => {
+              container.innerHTML = `<p style="color: var(--danger-color);">Gagal memuat: ${err.message}</p>`;
+            })
+            .getLKHWeeklyData(currentUser.email);
+      }
+
+      function renderLkhWeeklyTable(existingData) {
+        const container = document.getElementById('lkh-weekly-table-container');
+        const days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        // Menambahkan header kolom "AKSI"
+        let tableHTML = '<table><thead><tr><th>HARI</th><th>URAIAN KEGIATAN</th><th>HASIL / OUTPUT</th><th>VOL</th><th>AKSI</th></tr></thead><tbody>';
+        
+        days.forEach(day => {
+            const data = existingData[day] || {};
+            tableHTML += `
+              <tr data-day="${day}">
+                <td>${day}</td>
+                <td><textarea rows="3" id="uraian-${day}">${data.uraian || ''}</textarea></td>
+                <td><textarea rows="3" id="hasil-${day}">${data.hasil || ''}</textarea></td>
+                <td><textarea id="vol-${day}">${data.vol || ''}</textarea></td>
+                <td><button class="clear-btn" onclick="handleClearLkhRow(event)">Hapus</button></td>
+              </tr>
+            `;
+        });
+
+        tableHTML += '</tbody></table>';
+        container.innerHTML = tableHTML;
+      }
+
+      function handleSaveLKHWeekly() {
+        const button = document.getElementById('save-lkh-weekly-button');
+        button.disabled = true;
+        button.textContent = "Menyimpan...";
+        displayMessage('lkh-weekly-message', 'Menyimpan data LKH mingguan...', { isProcessing: true });
+        
+        const lkhWeeklyData = {};
+        const rows = document.querySelectorAll('#lkh-weekly-table-container tbody tr');
+        
+        rows.forEach(row => {
+          const day = row.dataset.day;
+          if (day) {
+            const uraian = document.getElementById(`uraian-${day}`).value;
+            const hasil = document.getElementById(`hasil-${day}`).value;
+            const vol = document.getElementById(`vol-${day}`).value;
+            lkhWeeklyData[day] = { uraian, hasil, vol };
+          }
+        });
+
+        google.script.run
+          .withSuccessHandler(response => {
+            if(response.status === 'success') {
+              displayMessage('lkh-weekly-message', response.message, { isSuccess: true });
+            } else {
+              displayMessage('lkh-weekly-message', response.message);
+            }
+            button.disabled = false;
+            button.textContent = "Simpan LKH Mingguan";
+          })
+          .withFailureHandler(error => {
+            displayMessage('lkh-weekly-message', 'Error: ' + error.message);
+            button.disabled = false;
+            button.textContent = "Simpan LKH Mingguan";
+          })
+          .saveLKHWeeklyData(currentUser.email, selectedSchool, lkhWeeklyData);
+      }
+
       // ===================================================================
       // INISIALISASI & OTENTIKASI
       // ===================================================================
@@ -665,6 +753,7 @@
         document.getElementById("sptjm-view-container").style.display = "none";
         document.getElementById("lkh-container").style.display = "none";
         document.getElementById("lkh-view-container").style.display = "none";
+        document.getElementById("lkh-weekly-container").style.display = "none";
         document.getElementById('email').value = "";
         document.getElementById('password').value = "";
         displayMessage('login-message', "Anda berhasil logout.", { isSuccess: true });
@@ -696,6 +785,7 @@
           document.getElementById("emis-import-container").style.display = "none";
           document.getElementById("emis-export-container").style.display = "none";
           document.getElementById("lkh-sptjm-dashboard-container").style.display = "none";
+          document.getElementById("lkh-weekly-container").style.display = "none";
           document.getElementById("guru-dashboard-container").style.display = "block";
           
           const welcomeH2 = document.getElementById('guru-welcome-message');
@@ -760,6 +850,7 @@
         document.getElementById("sptjm-view-container").style.display = "none";
         document.getElementById("lkh-container").style.display = "none";
         document.getElementById("lkh-view-container").style.display = "none";
+        document.getElementById("lkh-weekly-container").style.display = "none";
       }
 
       function showCeklokPage() {
@@ -1751,29 +1842,34 @@
       function generateLkhForm(year, month) {
           const container = document.getElementById('lkh-table-container');
           const saveButton = document.getElementById('save-lkh-button');
+          const applyWeeklyButton = document.getElementById('apply-weekly-data-button'); // 1. Ambil elemen tombol
+
           container.innerHTML = '<p>Memuat formulir LKH...</p>';
-          saveButton.disabled = true; // Pastikan tombol nonaktif saat memuat
+          saveButton.disabled = true;
+          applyWeeklyButton.disabled = true; // 2. Langsung nonaktifkan tombol
 
           google.script.run
             .withSuccessHandler(response => {
               if (response.success) {
                 renderLkhTable(response.workingDays, response.existingData);
-                saveButton.disabled = false; // Aktifkan tombol setelah data berhasil dirender
+                saveButton.disabled = false; 
+                applyWeeklyButton.disabled = false; // 3. Aktifkan kembali setelah sukses
               } else {
                 container.innerHTML = `<p style="color: var(--danger-color);">Gagal memuat data: ${response.error}</p>`;
-                // Tombol tetap nonaktif jika gagal
+                // Tombol akan tetap nonaktif jika gagal
               }
             })
             .withFailureHandler(err => {
               container.innerHTML = `<p style="color: var(--danger-color);">Gagal memuat: ${err.message}</p>`;
-              // Tombol tetap nonaktif jika gagal
+              // Tombol akan tetap nonaktif jika gagal
             })
             .getLKHData(currentUser.email, selectedSchool, year, month);
       }
 
       function renderLkhTable(workingDays, existingData) {
         const container = document.getElementById('lkh-table-container');
-        let tableHTML = '<table><thead><tr><th>HARI / TANGGAL</th><th>URAIAN KEGIATAN</th><th>HASIL / OUTPUT</th><th>VOL</th></tr></thead><tbody>';
+        // Menambahkan header kolom "AKSI"
+        let tableHTML = '<table><thead><tr><th>HARI / TANGGAL</th><th>URAIAN KEGIATAN</th><th>HASIL / OUTPUT</th><th>VOL</th><th>AKSI</th></tr></thead><tbody>';
         if (workingDays && workingDays.length > 0) {
           workingDays.forEach(day => {
             const data = existingData[day.date] || {};
@@ -1783,11 +1879,13 @@
                 <td><textarea rows="3" id="uraian-${day.date}">${data.uraian || ''}</textarea></td>
                 <td><textarea rows="3" id="hasil-${day.date}">${data.hasil || ''}</textarea></td>
                 <td><textarea id="vol-${day.date}">${data.vol || ''}</textarea></td>
+                <td><button class="clear-btn" onclick="handleClearLkhRow(event)">Hapus</button></td>
               </tr>
             `;
           });
         } else {
-          tableHTML += '<tr><td colspan="4">Tidak ada hari kerja untuk bulan yang dipilih.</td></tr>';
+          // Menyesuaikan colspan karena ada 5 kolom sekarang
+          tableHTML += '<tr><td colspan="5">Tidak ada hari kerja untuk bulan yang dipilih.</td></tr>';
         }
         tableHTML += '</tbody></table>';
         container.innerHTML = tableHTML;
@@ -1935,6 +2033,90 @@
 
       function handleLkhViewMonthChange() {
         showLkhViewPage();
+      }
+
+      function handleApplyWeeklyData() {
+        const button = document.getElementById('apply-weekly-data-button');
+        button.disabled = true;
+        button.textContent = 'Mengambil data...';
+        displayMessage('lkh-message', 'Mengambil data mingguan...', { isProcessing: true });
+
+        // Memanggil fungsi yang sudah ada untuk mendapatkan data mingguan
+        google.script.run
+          .withSuccessHandler(response => {
+            if (response.success && response.existingData) {
+              const weeklyData = response.existingData;
+              const rows = document.querySelectorAll('#lkh-table-container tbody tr');
+              let fieldsApplied = 0;
+
+              rows.forEach(row => {
+                const date = row.dataset.date;
+                if (!date) return;
+                
+                // Mendapatkan nama hari dari sel pertama di baris
+                const dayNameCell = row.querySelector('td');
+                if (!dayNameCell) return;
+
+                // Contoh isi sel: "Senin, 01 Oktober 2025"
+                const dayName = dayNameCell.innerText.split(',')[0].trim();
+
+                // Jika ada template untuk hari tersebut di data mingguan
+                if (weeklyData[dayName]) {
+                  const template = weeklyData[dayName];
+                  
+                  const uraianTextarea = document.getElementById(`uraian-${date}`);
+                  const hasilTextarea = document.getElementById(`hasil-${date}`);
+                  const volTextarea = document.getElementById(`vol-${date}`);
+
+                  // Cek apakah kolom Uraian kosong, jika ya, isi dengan data template
+                  if (uraianTextarea && uraianTextarea.value.trim() === '') {
+                    uraianTextarea.value = template.uraian || '';
+                    fieldsApplied++;
+                  }
+                  // Cek apakah kolom Hasil kosong, jika ya, isi dengan data template
+                  if (hasilTextarea && hasilTextarea.value.trim() === '') {
+                    hasilTextarea.value = template.hasil || '';
+                    fieldsApplied++;
+                  }
+                   // Cek apakah kolom Vol kosong, jika ya, isi dengan data template
+                   if (volTextarea && volTextarea.value.trim() === '') {
+                    volTextarea.value = template.vol || '';
+                    fieldsApplied++;
+                  }
+                }
+              });
+
+              if (fieldsApplied > 0) {
+                 displayMessage('lkh-message', `Data mingguan berhasil diterapkan.`, { isSuccess: true });
+              } else {
+                 displayMessage('lkh-message', 'Semua isian sudah terisi.', { isSuccess: true });
+              }
+
+            } else {
+              displayMessage('lkh-message', 'Gagal mengambil data mingguan atau tidak ada data tersimpan.');
+            }
+            button.disabled = false;
+            button.textContent = 'Ambil Data Mingguan';
+          })
+          .withFailureHandler(error => {
+            displayMessage('lkh-message', 'Error: ' + error.message);
+            button.disabled = false;
+            button.textContent = 'Ambil Data Mingguan';
+          })
+          .getLKHWeeklyData(currentUser.email);
+      }
+
+      function handleClearLkhRow(event) {
+        // Mencegah perilaku default dari tombol
+        event.preventDefault(); 
+        // Menemukan baris (tr) terdekat dari tombol yang diklik
+        const row = event.target.closest('tr');
+        // Menemukan semua elemen textarea di dalam baris tersebut
+        const textareas = row.querySelectorAll('textarea');
+        // Mengosongkan nilai dari setiap textarea
+        textareas.forEach(textarea => {
+          textarea.value = '';
+        });
       }
     </script>
   </body>
