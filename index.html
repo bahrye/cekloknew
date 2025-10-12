@@ -330,6 +330,7 @@
       <?!= include('lkh_sptjm'); ?>
       <?!= include('sptjm_settings'); ?>
       <?!= include('lkh'); ?>
+      <?!= include('lkh_view'); ?>
       </div>
     
     <div id="user-form-modal" class="modal">
@@ -663,6 +664,7 @@
         document.getElementById("sptjm-settings-container").style.display = "none";
         document.getElementById("sptjm-view-container").style.display = "none";
         document.getElementById("lkh-container").style.display = "none";
+        document.getElementById("lkh-view-container").style.display = "none";
         document.getElementById('email').value = "";
         document.getElementById('password').value = "";
         displayMessage('login-message', "Anda berhasil logout.", { isSuccess: true });
@@ -757,6 +759,7 @@
         document.getElementById("sptjm-settings-container").style.display = "none";
         document.getElementById("sptjm-view-container").style.display = "none";
         document.getElementById("lkh-container").style.display = "none";
+        document.getElementById("lkh-view-container").style.display = "none";
       }
 
       function showCeklokPage() {
@@ -1829,6 +1832,110 @@
           .saveLKHData(currentUser.email, selectedSchool, year, month, lkhData);
       }
 
+      function showLkhViewPage() {
+          document.getElementById('lkh-sptjm-dashboard-container').style.display = 'none';
+          document.getElementById('lkh-view-container').style.display = 'block';
+
+          const downloadButton = document.getElementById('download-lkh-pdf-button');
+          downloadButton.disabled = true;
+          displayMessage('lkh-download-message', 'Memuat data LKH, mohon tunggu...', { isProcessing: true });
+          
+          // --- LOGIKA BARU ---
+          const lkhMonthInput = document.getElementById('lkh-view-month-input');
+          // Jika input bulan di halaman LKH kosong, ambil nilai dari dasbor utama
+          if (!lkhMonthInput.value) {
+            lkhMonthInput.value = document.getElementById('summary-month-input').value || new Date().toISOString().slice(0, 7);
+          }
+          const selectedMonth = lkhMonthInput.value;
+          // --- AKHIR LOGIKA BARU ---
+
+          const [year, month] = selectedMonth.split('-').map(Number);
+
+          google.script.run
+              .withSuccessHandler(response => {
+                  if (response.success) {
+                      const data = response.data;
+                      
+                      document.getElementById('lkh-view-name').innerText = data.user.name || '-';
+                      document.getElementById('lkh-view-nip').innerText = data.settings.nip || '-';
+                      document.getElementById('lkh-view-jabatan').innerText = data.settings.jabatan || 'Guru';
+                      document.getElementById('lkh-view-period').innerText = `${data.period.firstDay} - ${data.period.lastDay} (${data.lkhItems.length} Hari Kerja)`;
+                      document.getElementById('lkh-view-place-date').innerText = `${data.settings.tempat || 'Butung'}, ${data.signatureDate}`;
+                      document.getElementById('lkh-view-signature-name').innerText = data.user.name || '-';
+                      document.getElementById('lkh-view-signature-nip').innerText = data.settings.nip || '-';
+                      document.getElementById('lkh-view-headmaster-name').innerText = data.settings.namaKepala || '[Nama Kepala Madrasah]';
+                      document.getElementById('lkh-view-headmaster-nip').innerText = data.settings.nipKepala || '-';
+
+                      const tableBody = document.getElementById('lkh-view-table-body');
+                      tableBody.innerHTML = '';
+                      if (data.lkhItems.length > 0) {
+                          data.lkhItems.forEach((item, index) => {
+                              const row = `
+                                  <tr>
+                                      <td style="border: 1px solid black; padding: 8px; text-align: center;">${index + 1}</td>
+                                      <td style="border: 1px solid black; padding: 8px;">${item.dayName}, ${item.formattedDate}</td>
+                                      <td style="border: 1px solid black; padding: 8px; white-space: pre-wrap;">${item.uraian}</td>
+                                      <td style="border: 1px solid black; padding: 8px; white-space: pre-wrap;">${item.hasil}</td>
+                                      <td style="border: 1px solid black; padding: 8px; text-align: center;">${item.vol}</td>
+                                      <td style="border: 1px solid black; padding: 8px;"></td>
+                                  </tr>
+                              `;
+                              tableBody.innerHTML += row;
+                          });
+                      } else {
+                          tableBody.innerHTML = '<tr><td colspan="6" style="border: 1px solid black; padding: 8px; text-align: center;">Tidak ada data kegiatan untuk bulan ini.</td></tr>';
+                      }
+
+                      downloadButton.disabled = false;
+                      displayMessage('lkh-download-message', 'Pratinjau siap. Klik untuk mengunduh.', { isSuccess: true });
+                  } else {
+                      displayMessage('lkh-download-message', `Error: ${response.error}`);
+                  }
+              })
+              .withFailureHandler(err => {
+                  displayMessage('lkh-download-message', `Error: ${err.message}`);
+              })
+              .getLkhViewData(currentUser.email, selectedSchool, year, month);
+      }
+
+      function handleDownloadLkhPdf() {
+          const button = document.getElementById('download-lkh-pdf-button');
+          button.disabled = true;
+          button.textContent = 'Membuat PDF...';
+          displayMessage('lkh-download-message', 'Sedang memproses & membuat PDF, mohon tunggu...', { isProcessing: true });
+          
+          // --- PERUBAHAN ---
+          // Mengambil nilai bulan dari input di halaman LKH, bukan dari dasbor
+          const monthInput = document.getElementById('lkh-view-month-input').value;
+          // --- AKHIR PERUBAHAN ---
+
+          google.script.run
+              .withSuccessHandler(response => {
+                  if (response.success) {
+                      const link = document.createElement('a');
+                      link.href = `data:application/pdf;base64,${response.pdfData}`;
+                      link.download = response.fileName;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                      displayMessage('lkh-download-message', 'PDF berhasil dibuat dan sedang diunduh!', { isSuccess: true });
+                  } else {
+                      displayMessage('lkh-download-message', 'Error: ' + response.error);
+                  }
+                  button.disabled = false;
+                  button.textContent = 'Unduh PDF';
+              })
+              .withFailureHandler(error => {
+                  displayMessage('lkh-download-message', 'Error: ' + error.message);
+                  button.disabled = false;
+                  button.textContent = 'Unduh PDF';
+              })
+              .generateLkhPdf(currentUser.email, selectedSchool, monthInput);
+      }
+
+      function handleLkhViewMonthChange() {
+        showLkhViewPage();
+      }
     </script>
   </body>
 </html>
