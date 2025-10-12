@@ -329,6 +329,7 @@
       <?!= include('sptjm_view'); ?>
       <?!= include('lkh_sptjm'); ?>
       <?!= include('sptjm_settings'); ?>
+      <?!= include('lkh'); ?>
       </div>
     
     <div id="user-form-modal" class="modal">
@@ -658,6 +659,7 @@
         document.getElementById("lkh-sptjm-dashboard-container").style.display = "none";
         document.getElementById("sptjm-settings-container").style.display = "none";
         document.getElementById("sptjm-view-container").style.display = "none";
+        document.getElementById("lkh-container").style.display = "none";
         document.getElementById('email').value = "";
         document.getElementById('password').value = "";
         displayMessage('login-message', "Anda berhasil logout.", { isSuccess: true });
@@ -751,6 +753,7 @@
         document.getElementById("lkh-sptjm-dashboard-container").style.display = "block";
         document.getElementById("sptjm-settings-container").style.display = "none";
         document.getElementById("sptjm-view-container").style.display = "none";
+        document.getElementById("lkh-container").style.display = "none";
       }
 
       function showCeklokPage() {
@@ -1710,6 +1713,63 @@
                   button.textContent = 'Unduh Rekap Semua Guru (Satu Sekolah)';
               })
               .prepareSchoolRekapForPrint(currentUser.email, monthInput, selectedSchool);
+      }
+
+      function showLkhPage() {
+        document.getElementById("lkh-sptjm-dashboard-container").style.display = "none";
+        document.getElementById("lkh-container").style.display = "block";
+        const lkhMonthInput = document.getElementById('lkh-month-input');
+        if (!lkhMonthInput.value) {
+          const today = new Date();
+          lkhMonthInput.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+        }
+        handleLkhMonthChange();
+      }
+
+      function handleLkhMonthChange() {
+        const monthInputValue = document.getElementById('lkh-month-input').value;
+        if (monthInputValue) {
+          const [year, month] = monthInputValue.split('-').map(Number);
+          generateLkhForm(year, month);
+        }
+      }
+
+      function generateLkhForm(year, month) {
+        const container = document.getElementById('lkh-table-container');
+        container.innerHTML = '<p>Memuat formulir LKH...</p>';
+        google.script.run
+          .withSuccessHandler(response => {
+            if (response.success) {
+              renderLkhTable(response.workingDays, year, month);
+            } else {
+              container.innerHTML = `<p style="color: var(--danger-color);">Gagal memuat data: ${response.error}</p>`;
+            }
+          })
+          .withFailureHandler(err => {
+            container.innerHTML = `<p style="color: var(--danger-color);">Gagal memuat: ${err.message}</p>`;
+          })
+          .getLKHData(currentUser.email, selectedSchool, year, month);
+      }
+
+      function renderLkhTable(workingDays, year, month) {
+        const container = document.getElementById('lkh-table-container');
+        let tableHTML = '<table><thead><tr><th>HARI / TANGGAL</th><th>URAIAN KEGIATAN</th><th>HASIL / OUTPUT</th><th>VOL</th></tr></thead><tbody>';
+        if (workingDays && workingDays.length > 0) {
+          workingDays.forEach(day => {
+            tableHTML += `
+              <tr data-date="${day.date}">
+                <td>${day.dayName}, ${day.formattedDate}</td>
+                <td><textarea rows="3" id="uraian-${day.date}"></textarea></td>
+                <td><textarea rows="3" id="hasil-${day.date}"></textarea></td>
+                <td><input type="text" id="vol-${day.date}"></td>
+              </tr>
+            `;
+          });
+        } else {
+          tableHTML += '<tr><td colspan="4">Tidak ada hari kerja untuk bulan yang dipilih.</td></tr>';
+        }
+        tableHTML += '</tbody></table>';
+        container.innerHTML = tableHTML;
       }
     </script>
   </body>
