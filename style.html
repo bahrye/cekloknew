@@ -352,6 +352,7 @@
     padding: 15px;
     margin-bottom: 10px;
   }
+  /* Mengembalikan warna abu-abu untuk tombol sekunder biasa */
   .action-button.secondary {
     background-color: #6B7280;
     margin-top: 0px;
@@ -359,6 +360,30 @@
   .action-button.secondary:hover:not(:disabled) {
     background-color: #4B5563;
     box-shadow: 0 4px 12px rgba(107, 114, 128, 0.2);
+  }
+  .action-button.secondary:disabled {
+    background-color: #E5E7EB;
+    color: #9CA3AF;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+
+  /* TAMBAHKAN BLOK BARU INI UNTUK TOMBOL KUNING */
+  .action-button.warning {
+    background-color: var(--warning-color); /* Variabel warna kuning */
+    color: white;
+  }
+  .action-button.warning:hover:not(:disabled) {
+    background-color: #D97706; /* Warna kuning lebih gelap saat disentuh */
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.25);
+  }
+  .action-button.warning:disabled {
+    background-color: #FEF3C7; /* Warna kuning pucat saat nonaktif */
+    color: #92400E;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
   }
 
   .back-button {
@@ -608,7 +633,10 @@
   #lkh-table-container td:nth-child(3) { width: 32.5%; } /* Kolom Hasil */
 
   #lkh-table-container th:nth-child(4),
-  #lkh-table-container td:nth-child(4) { width: 15%; } /* Kolom Vol */
+  #lkh-table-container td:nth-child(4) { width: 18%; } /* Kolom Vol */
+
+  #lkh-table-container th:nth-child(5),
+  #lkh-table-container td:nth-child(5) { width: 10%; text-align: center; } /* Kolom Aksi */
 
 
   #lkh-table-container textarea,
@@ -636,4 +664,56 @@
     border-color: var(--primary-color);
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
   }
+
+/* --- Style untuk LKH Mingguan Form --- */
+  #lkh-weekly-container .card {
+    max-width: 90%;
+    width: 850px;
+  }
+  
+  #lkh-weekly-table-container {
+    overflow-x: auto;
+    padding-bottom: 15px;
+  }
+
+  #lkh-weekly-table-container table {
+      width: 100%;
+      min-width: 800px;
+      table-layout: fixed;
+  }
+  
+  #lkh-weekly-table-container textarea {
+    width: 100%;
+    min-height: 80px;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-sizing: border-box;
+    font-family: 'Poppins', sans-serif;
+    font-size: 14px;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    resize: vertical;
+  }
+  
+  #lkh-weekly-table-container textarea:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+  }
+
+  /* Lebar Kolom LKH Mingguan */
+  #lkh-weekly-table-container th:nth-child(1),
+  #lkh-weekly-table-container td:nth-child(1) { width: 6%; } /* Kolom Hari */
+  
+  #lkh-weekly-table-container th:nth-child(2),
+  #lkh-weekly-table-container td:nth-child(2) { width: 32.5%; } /* Kolom Uraian */
+  
+  #lkh-weekly-table-container th:nth-child(3),
+  #lkh-weekly-table-container td:nth-child(3) { width: 32.5%; } /* Kolom Hasil */
+
+  #lkh-weekly-table-container th:nth-child(4),
+  #lkh-weekly-table-container td:nth-child(4) { width: 18%; } /* Kolom Vol */
+
+  #lkh-weekly-table-container th:nth-child(5),
+  #lkh-weekly-table-container td:nth-child(5) { width: 10%; text-align: center; } /* Kolom Aksi */
 </style>
