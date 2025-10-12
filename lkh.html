@@ -1,0 +1,13 @@
+<div id="lkh-container" style="display:none;">
+  <div class="card">
+    <button class="back-button" onclick="showLkhSptjmDashboard()">&larr; Kembali</button>
+    <h2 style="margin-top: 15px;">Buat Laporan Kinerja Harian (LKH)</h2>
+    <div class="input-group">
+      <label for="lkh-month-input">Pilih Bulan dan Tahun</label>
+      <input type="month" id="lkh-month-input" onchange="handleLkhMonthChange()">
+    </div>
+    <div id="lkh-table-container"></div>
+    <button id="save-lkh-button" onclick="handleSaveLKH()">Simpan LKH</button>
+    <p id="lkh-message" class="message"></p>
+  </div>
+</div>
