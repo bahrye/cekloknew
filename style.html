@@ -578,4 +578,62 @@
       cursor: default;
       opacity: 1;
   }
+  
+  /* --- Style untuk LKH Form --- */
+  #lkh-container .card {
+    max-width: 90%; /* Perlebar card LKH */
+    width: 850px;
+  }
+  
+  #lkh-table-container {
+    overflow-x: auto; /* Aktifkan scroll horizontal */
+    overflow-y: hidden; /* Matikan scroll vertikal di sini, karena sudah ada di body */
+    padding-bottom: 15px; /* Beri sedikit ruang agar scrollbar tidak menempel */
+  }
+
+  #lkh-table-container table {
+      width: 100%;
+      min-width: 800px; /* Atur lebar minimum tabel agar scrollbar muncul jika layar kecil */
+      table-layout: fixed; /* Paksa lebar kolom agar konsisten */
+  }
+
+  /* Atur lebar kolom secara spesifik */
+  #lkh-table-container th:nth-child(1),
+  #lkh-table-container td:nth-child(1) { width: 20%; } /* Kolom Tanggal */
+  
+  #lkh-table-container th:nth-child(2),
+  #lkh-table-container td:nth-child(2) { width: 32.5%; } /* Kolom Uraian */
+  
+  #lkh-table-container th:nth-child(3),
+  #lkh-table-container td:nth-child(3) { width: 32.5%; } /* Kolom Hasil */
+
+  #lkh-table-container th:nth-child(4),
+  #lkh-table-container td:nth-child(4) { width: 15%; } /* Kolom Vol */
+
+
+  #lkh-table-container textarea,
+  #lkh-table-container input[type="text"] {
+    width: 100%;
+    min-height: 80px; /* Tingkatkan tinggi input */
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-sizing: border-box;
+    font-family: 'Poppins', sans-serif;
+    font-size: 14px;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    resize: vertical;
+  }
+  
+  #lkh-table-container input[type="text"] {
+      height: 80px; /* Samakan tinggi input text */
+      resize: none;
+  }
+  
+  #lkh-table-container textarea:focus,
+  #lkh-table-container input[type="text"]:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+  }
 </style>
