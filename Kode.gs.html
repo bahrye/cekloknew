@@ -1388,3 +1388,106 @@ function generateLkhPdf(email, school, selectedMonthYear) {
     lock.releaseLock();
   }
 }
+
+function getLKHWeeklySheet_() {
+  const sheetName = "LKH_Mingguan";
+  let sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+    const headers = ["Email", "Nama", "Sekolah", "Hari", "Uraian Kegiatan", "Hasil/Output", "Vol"];
+    sheet.appendRow(headers);
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function getLKHWeeklyData(email) {
+  try {
+    const sheet = getLKHWeeklySheet_();
+    const data = sheet.getDataRange().getValues();
+    const existingData = {};
+    
+    // Loop dari baris terakhir ke atas untuk mendapatkan data terbaru
+    for (let i = data.length - 1; i > 0; i--) {
+      const row = data[i];
+      const rowEmail = row[0];
+      const day = row[3];
+      // Jika email cocok dan hari tersebut belum ada di data, tambahkan
+      if (rowEmail.toLowerCase() === email.toLowerCase() && !existingData[day]) {
+        existingData[day] = {
+          uraian: row[4] || "",
+          hasil: row[5] || "",
+          vol: row[6] || ""
+        };
+      }
+      // Jika semua 6 hari sudah ditemukan, hentikan loop
+      if (Object.keys(existingData).length === 6) break;
+    }
+    
+    return { success: true, existingData };
+  } catch (e) {
+    Logger.log("Error di getLKHWeeklyData: " + e.message);
+    return { success: false, error: e.message };
+  }
+}
+
+function saveLKHWeeklyData(email, school, lkhWeeklyData) {
+  try {
+    const users = usersSheet.getDataRange().getValues();
+    const userRow = users.find(u => u[0].toLowerCase() === email.toLowerCase());
+    if (!userRow) throw new Error("User not found");
+    const userName = userRow[2];
+    
+    const sheet = getLKHWeeklySheet_();
+    const allData = sheet.getDataRange().getValues();
+    
+    // Buat peta untuk data yang ada agar mudah dicari
+    // Peta akan berisi: { 'Senin': { rowIndex: 5 }, 'Selasa': { rowIndex: 6 }, ... }
+    const existingDataMap = {};
+    for (let i = 1; i < allData.length; i++) {
+      const rowEmail = allData[i][0]; // Kolom email
+      const day = allData[i][3];      // Kolom hari
+      if (rowEmail.toLowerCase() === email.toLowerCase()) {
+        existingDataMap[day] = { rowIndex: i + 1 };
+      }
+    }
+    
+    const rowsToUpdate = [];
+    const rowsToInsert = [];
+    const days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+
+    days.forEach(day => {
+      const entry = lkhWeeklyData[day] || {};
+      const newRowData = [email, userName, school, day, entry.uraian || "", entry.hasil || "", entry.vol || ""];
+
+      // Jika data untuk hari ini sudah ada di peta, siapkan untuk di-update
+      if (existingDataMap[day]) {
+        const rowIndex = existingDataMap[day].rowIndex;
+        rowsToUpdate.push({
+          range: sheet.getRange(rowIndex, 1, 1, 7), // Target: 1 baris, 7 kolom
+          values: [newRowData]
+        });
+      } else {
+        // Jika belum ada, siapkan untuk ditambahkan
+        rowsToInsert.push(newRowData);
+      }
+    });
+
+    // Lakukan operasi update secara massal (jika ada)
+    if (rowsToUpdate.length > 0) {
+      rowsToUpdate.forEach(update => {
+        update.range.setValues(update.values);
+      });
+    }
+
+    // Lakukan operasi penambahan data baru secara massal (jika ada)
+    if (rowsToInsert.length > 0) {
+      sheet.getRange(sheet.getLastRow() + 1, 1, rowsToInsert.length, 7).setValues(rowsToInsert);
+    }
+
+    return { status: "success", message: "LKH mingguan berhasil diperbarui." };
+  } catch (e) {
+    Logger.log(`Error in saveLKHWeeklyData (optimized): ${e.message}`);
+    return { status: "error", message: `Gagal menyimpan LKH: ${e.message}` };
+  }
+}
