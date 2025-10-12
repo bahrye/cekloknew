@@ -1196,3 +1196,195 @@ function saveLKHData(email, school, year, month, lkhData) {
     return { status: "error", message: `Gagal menyimpan LKH: ${e.message}` };
   }
 }
+
+function getLkhViewData(email, school, year, month) {
+  try {
+    const users = usersSheet.getDataRange().getValues();
+    const userRow = users.find(u => u[0].toLowerCase() === email.toLowerCase());
+    if (!userRow) throw new Error("Pengguna tidak ditemukan.");
+    
+    const lkhSettings = getSptjmSettings(email);
+    lkhSettings.schoolAddress = 'Alamat: Lingkungan Butung Kel. Bontokamase Kec. Herlang Kab. Bulukumba (92573)';
+    
+    const lkhDataResult = getLKHData(email, school, year, month);
+    if (!lkhDataResult.success) throw new Error(lkhDataResult.error);
+
+    const lkhItems = lkhDataResult.workingDays.map(day => {
+      const entry = lkhDataResult.existingData[day.date] || {};
+      return {
+        dayName: day.dayName,
+        formattedDate: day.formattedDate.split(' ').slice(0, 3).join(' '),
+        uraian: entry.uraian || "",
+        hasil: entry.hasil || "",
+        vol: entry.vol || ""
+      };
+    });
+    
+    // --- PERUBAHAN: Logika Penentuan Rentang Tanggal ---
+    const workingDays = lkhDataResult.workingDays;
+    let period;
+
+    if (workingDays.length > 0) {
+      // Ambil tanggal dari hari kerja pertama dan terakhir di tabel
+      const firstDayStr = workingDays[0].formattedDate;
+      const lastDayStr = workingDays[workingDays.length - 1].formattedDate;
+      period = {
+        firstDay: firstDayStr,
+        lastDay: lastDayStr
+      };
+    } else {
+      // Fallback jika tidak ada hari kerja sama sekali dalam sebulan
+      const firstDayOfMonth = new Date(Date.UTC(year, month - 1, 1));
+      const lastDayOfMonth = new Date(Date.UTC(year, month, 0));
+      period = {
+        firstDay: firstDayOfMonth.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'UTC' }),
+        lastDay: lastDayOfMonth.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'UTC' })
+      };
+    }
+    // --- AKHIR PERUBAHAN ---
+
+    const holidaysData = holidaysSheet.getDataRange().getValues().slice(1);
+    const nationalHolidays = {};
+    holidaysData.forEach(row => {
+      if (row[0] instanceof Date) {
+        nationalHolidays[Utilities.formatDate(row[0], "GMT", "yyyy-MM-dd")] = true;
+      }
+    });
+    let signatureDateObj = new Date(Date.UTC(year, month, 0));
+    while (signatureDateObj.getUTCDay() === 0 || nationalHolidays[Utilities.formatDate(signatureDateObj, "GMT", "yyyy-MM-dd")]) {
+      signatureDateObj.setDate(signatureDateObj.getDate() - 1);
+    }
+    const formattedSignatureDate = signatureDateObj.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'UTC' });
+
+    return {
+      success: true,
+      data: {
+        user: { name: userRow[2] },
+        settings: lkhSettings,
+        lkhItems: lkhItems,
+        period: period,
+        signatureDate: formattedSignatureDate
+      }
+    };
+  } catch(e) {
+    Logger.log("Error di getLkhViewData: " + e.message + " | Stack: " + e.stack);
+    return { success: false, error: e.message };
+  }
+}
+
+function generateLkhPdf(email, school, selectedMonthYear) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  let tempDocId = null;
+  try {
+    const [yearStr, monthStr] = selectedMonthYear.split('-');
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10);
+
+    const viewDataResponse = getLkhViewData(email, school, year, month);
+    if (!viewDataResponse.success) throw new Error(viewDataResponse.error);
+    const data = viewDataResponse.data;
+    
+    // --- LOGIKA BARU: Menentukan Tahun Ajaran ---
+    let tahunAjaran;
+    if (month >= 7 && month <= 12) {
+      tahunAjaran = `${year}/${year + 1}`;
+    } else {
+      tahunAjaran = `${year - 1}/${year}`;
+    }
+    
+    // --- LOGIKA BARU: Menentukan Tanggal Tanda Tangan ---
+    const holidaysData = holidaysSheet.getDataRange().getValues().slice(1);
+    const nationalHolidays = {};
+    holidaysData.forEach(row => {
+      if (row[0] instanceof Date) {
+        nationalHolidays[Utilities.formatDate(row[0], "GMT", "yyyy-MM-dd")] = true;
+      }
+    });
+
+    let signatureDate = new Date(Date.UTC(year, month, 0)); // Mulai dari hari terakhir bulan ini
+    while (signatureDate.getUTCDay() === 0 || nationalHolidays[Utilities.formatDate(signatureDate, "GMT", "yyyy-MM-dd")]) {
+      signatureDate.setDate(signatureDate.getDate() - 1); // Mundur satu hari jika hari Minggu atau libur nasional
+    }
+    const formattedSignatureDate = signatureDate.toLocaleDateString('id-ID', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'UTC'
+    });
+    
+    // --- PERUBAHAN: Memilih Template ID berdasarkan Nama Sekolah ---
+    const templateIds = {
+      'MTS TANUNTUNG': '1aqlTVbB-lc4V7FG2bKqaIeZWptVathW9a-mbErNiY4U',
+      'MIS BUTUNG': '1tJ5DcKcy1P3G5RAAfBDGb6pIy4nUXrrahJeZO2R7RAU'
+    };
+    
+    const templateId = templateIds[school];
+    if (!templateId) {
+      return { success: false, error: `Template LKH untuk sekolah "${school}" tidak ditemukan.` };
+    }
+    // --- AKHIR PERUBAHAN ---
+
+    const templateDoc = DriveApp.getFileById(templateId);
+    const newFileName = `LKH_${data.user.name.replace(/\s/g, '_')}_${selectedMonthYear}`;
+    const tempDocFile = templateDoc.makeCopy(newFileName);
+    tempDocId = tempDocFile.getId();
+    
+    const doc = DocumentApp.openById(tempDocId);
+    const body = doc.getBody();
+
+    body.replaceText('{{TAHUN_AJARAN}}', tahunAjaran);
+    body.replaceText('{{NAMA_SEKOLAH}}', school.toUpperCase());
+    body.replaceText('{{ALAMAT_SEKOLAH}}', data.settings.schoolAddress || '-');
+    body.replaceText('{{NAMA}}', data.user.name);
+    body.replaceText('{{NIP}}', data.settings.nip || '-');
+    body.replaceText('{{JABATAN}}', data.settings.jabatan || 'Guru');
+    body.replaceText('{{PERIODE}}', `${data.period.firstDay} - ${data.period.lastDay} (${data.lkhItems.length} Hari Kerja)`);
+    body.replaceText('{{TEMPAT_TANGGAL}}', `${data.settings.tempat || 'Butung'}, ${formattedSignatureDate}`);
+    body.replaceText('{{NAMA_KEPALA}}', data.settings.namaKepala || '-');
+    body.replaceText('{{NIP_KEPALA}}', data.settings.nipKepala || '-');
+    body.replaceText('{{NAMA_TTD}}', data.user.name);
+    body.replaceText('{{NIP_TTD}}', data.settings.nip || '-');
+    
+    const tables = body.getTables();
+    if (tables.length > 0) {
+        const table = tables[0];
+        if (table.getNumRows() > 1) {
+            const templateRow = table.getRow(1);
+            if (data.lkhItems.length === 0) {
+                 table.removeRow(1);
+                 table.appendTableRow().appendTableCell('Tidak ada data kegiatan untuk bulan ini.').getParent().merge();
+            } else {
+                data.lkhItems.forEach((item, index) => {
+                    const newRow = table.appendTableRow(templateRow.copy());
+                    newRow.getCell(0).setText(String(index + 1));
+                    newRow.getCell(1).setText(`${item.dayName}, ${item.formattedDate}`);
+                    newRow.getCell(2).setText(item.uraian);
+                    newRow.getCell(3).setText(item.hasil);
+                    newRow.getCell(4).setText(item.vol);
+                });
+                table.removeRow(1);
+            }
+        }
+    }
+    
+    doc.saveAndClose();
+    const pdfBlob = tempDocFile.getAs('application/pdf');
+    
+    return {
+      success: true,
+      pdfData: Utilities.base64Encode(pdfBlob.getBytes()),
+      fileName: `${newFileName}.pdf`
+    };
+
+  } catch(e) {
+    Logger.log("Error di generateLkhPdf: " + e.message + " | Stack: " + e.stack);
+    return { success: false, error: "Gagal membuat PDF LKH: " + e.message };
+  } finally {
+    if (tempDocId) {
+      try { DriveApp.getFileById(tempDocId).setTrashed(true); } catch(err) {}
+    }
+    lock.releaseLock();
+  }
+}
