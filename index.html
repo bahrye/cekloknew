@@ -839,7 +839,14 @@
         if (newSchool && newSchool !== selectedSchool) {
           selectedSchool = newSchool;
           sessionStorage.setItem('ceklokSelectedSchool', selectedSchool);
-          showGuruDashboard(); 
+          
+          // MODIFIKASI DIMULAI DI SINI
+          if (currentUser.role === 'guru') {
+            showGuruDashboard(); 
+          } else if (currentUser.role === 'staff') {
+            showStaffDashboard();
+          }
+          // MODIFIKASI SELESAI
         }
       }
 
@@ -1396,7 +1403,18 @@
           document.getElementById("emis-export-container").style.display = "none";
 
           document.getElementById("staff-dashboard-container").style.display = "block";
-          document.getElementById("staff-welcome-message").innerHTML = `Halo Staff, <strong>${currentUser.name}</strong><br><small>${selectedSchool}</small>`;
+          
+          // MODIFIKASI DIMULAI DI SINI
+          const welcomeH2 = document.getElementById('staff-welcome-message');
+          let welcomeHTML = `Halo Staff, <strong>${currentUser.name}</strong>`;
+
+          if (currentUser.schools && currentUser.schools.length > 1) {
+            welcomeHTML += `<br><small id="school-switcher-link" onclick="openSchoolSwitcherModal()">${selectedSchool}</small>`;
+          } else {
+            welcomeHTML += `<br><small>${selectedSchool}</small>`;
+          }
+          welcomeH2.innerHTML = welcomeHTML;
+          // MODIFIKASI SELESAI
           
           loadSchoolTeachers();
           loadStaffSummary();
@@ -1423,7 +1441,8 @@
               selectEmis.appendChild(option);
             });
           })
-          .getSchoolTeachers(currentUser.email);
+          // MODIFIKASI DI SINI: tambahkan 'selectedSchool'
+          .getSchoolTeachers(currentUser.email, selectedSchool);
       }
 
       function loadStaffSummary() {
@@ -1443,7 +1462,8 @@
             .withFailureHandler(err => {
               container.innerHTML = `<p style="color: var(--danger-color);">Gagal memuat: ${err.message}</p>`;
             })
-            .getSchoolAttendanceSummary(currentUser.email, year, month);
+            // MODIFIKASI DI SINI: tambahkan 'selectedSchool'
+            .getSchoolAttendanceSummary(currentUser.email, selectedSchool, year, month);
       }
 
       function renderStaffSummaryTable(summaries) {
