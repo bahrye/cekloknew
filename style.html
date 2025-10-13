@@ -167,6 +167,11 @@
     border-radius: 12px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.05);
   }
+  
+  .table-scroll-wrapper {
+    overflow-x: auto;
+    width: 100%;
+  }
 
   table {
     width: 100%;
@@ -201,15 +206,24 @@
     border-bottom: none;
   }
   
-  input[type="time"] {
+  .time-entry {
     border: 1px solid #ddd;
     border-radius: 6px;
     padding: 6px;
-    font-family: 'Poppins', sans-serif;
-    width: 100%;
+    font-family: monospace;
+    font-size: 16px;
+    width: 85px;
+    min-width: 85px;
+    text-align: center;
     box-sizing: border-box;
     background-color: #FFFFFF;
     transition: background-color 0.3s;
+  }
+
+  .time-entry:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
   }
   
   td select {
@@ -223,7 +237,7 @@
     background-color: #FFFFFF;
   }
 
-  input[type="time"]:disabled {
+  .time-entry:disabled {
     background-color: #F3F4F6;
     border-color: #E5E7EB;
     cursor: not-allowed;
@@ -233,11 +247,6 @@
     background-color: #FEE2E2;
     color: #991B1B;
     font-weight: 500;
-  }
-  .sunday-row input, .sunday-row select, .holiday-row input, .holiday-row select {
-     background-color: #FCA5A5;
-     cursor: not-allowed;
-     border-color: #F87171;
   }
 
   .clear-btn {
@@ -716,4 +725,13 @@
 
   #lkh-weekly-table-container th:nth-child(5),
   #lkh-weekly-table-container td:nth-child(5) { width: 10%; text-align: center; } /* Kolom Aksi */
+
+  /* Perbaikan untuk Tampilan Mobile */
+  @media (max-width: 600px) {
+    th, td {
+      padding: 12px 8px; /* Sesuaikan padding agar tidak terlalu sempit */
+      white-space: nowrap; /* Mencegah teks header membungkus ke bawah */
+    }
+  }
+
 </style>
