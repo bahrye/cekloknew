@@ -222,6 +222,12 @@ function saveMonthlyAttendance(payload) {
     }
   }
   
+  // MODIFIKASI DIMULAI DI SINI: Urutkan data baru secara kronologis berdasarkan tanggal
+  if (rowsToInsert.length > 0) {
+    rowsToInsert.sort((a, b) => a[4] - b[4]); // a[4] dan b[4] adalah objek Date, ini akan mengurutkan secara kronologis.
+  }
+  // MODIFIKASI SELESAI
+  
   if (rowsToInsert.length > 0) {
     sheet.getRange(sheet.getLastRow() + 1, 1, rowsToInsert.length, rowsToInsert[0].length).setValues(rowsToInsert);
   }
@@ -273,16 +279,17 @@ function getAttendanceSummary(userEmail, school, year, month) {
   }
 }
 
-function getSchoolAttendanceSummary(userEmail, year, month) {
+function getSchoolAttendanceSummary(userEmail, school, year, month) { // MODIFIKASI: Tambahkan parameter school
   if (!checkIfAdminOrStaff(userEmail)) {
     throw new Error("Akses ditolak.");
   }
-  const teachers = getSchoolTeachers(userEmail);
-  const school = teachers.length > 0 ? teachers[0].school : null;
+  // MODIFIKASI: Panggil getSchoolTeachers dengan parameter school yang baru
+  const teachers = getSchoolTeachers(userEmail, school); 
   if (!school) return [];
   
   const summaries = teachers.map(teacher => {
-    const summaryResult = getAttendanceSummary(teacher.email, school, year, month);
+    // MODIFIKASI: Gunakan 'school' yang dilewatkan, bukan 'teacher.school'
+    const summaryResult = getAttendanceSummary(teacher.email, school, year, month); 
     return {
       name: teacher.name,
       email: teacher.email,
@@ -765,22 +772,30 @@ function getSchoolList(adminEmail) {
   return [...new Set(allSchools)].filter(Boolean);
 }
 
-function getSchoolTeachers(userEmail) {
+function getSchoolTeachers(userEmail, selectedSchool) { // MODIFIKASI: Tambahkan parameter selectedSchool
   if (!checkIfAdminOrStaff(userEmail)) throw new Error("Akses ditolak.");
-  const allUsers = usersSheet.getDataRange().getValues();
-  const currentUserRow = allUsers.find(u => u[0].toLowerCase() === userEmail.toLowerCase());
-  if (!currentUserRow) throw new Error("Pengguna tidak ditemukan.");
   
-  const userPrimarySchool = (currentUserRow[3] || "").split(',')[0].trim();
+  // MODIFIKASI DIMULAI DI SINI
+  // Gunakan sekolah yang dipilih. Jika tidak ada, baru ambil dari profil pengguna.
+  let schoolToFilter = selectedSchool;
+  if (!schoolToFilter) {
+    const allUsersForFallback = usersSheet.getDataRange().getValues();
+    const currentUserRowForFallback = allUsersForFallback.find(u => u[0].toLowerCase() === userEmail.toLowerCase());
+    if (!currentUserRowForFallback) throw new Error("Pengguna tidak ditemukan.");
+    schoolToFilter = (currentUserRowForFallback[3] || "").split(',')[0].trim();
+  }
+  // MODIFIKASI SELESAI
+
+  const allUsers = usersSheet.getDataRange().getValues();
   
   const teachers = allUsers.slice(1)
-    .filter(user => user[4] === 'guru' && (user[3] || "").split(',').map(s => s.trim()).includes(userPrimarySchool))
-    .map(user => ({ email: user[0], name: user[2], school: userPrimarySchool }));
+    .filter(user => user[4] === 'guru' && (user[3] || "").split(',').map(s => s.trim()).includes(schoolToFilter)) // MODIFIKASI: Gunakan schoolToFilter
+    .map(user => ({ email: user[0], name: user[2], school: schoolToFilter })); // MODIFIKASI: Gunakan schoolToFilter
     
   const urutanNamaSheet = getUrutanNamaSheet_();
   const urutanData = urutanNamaSheet.getDataRange().getValues().slice(1);
   const schoolSortOrder = urutanData
-    .filter(row => String(row[1]).trim() === userPrimarySchool)
+    .filter(row => String(row[1]).trim() === schoolToFilter) // MODIFIKASI: Gunakan schoolToFilter
     .map((row, index) => [String(row[0]).trim(), index]);
   const urutanMap = new Map(schoolSortOrder);
     
