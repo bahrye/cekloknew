@@ -927,6 +927,52 @@
             })
             .getAppSettingsForUser(userEmail, schoolForCall, year, month);
       }
+      
+      function handleTimeInput(event) {
+        const input = event.target;
+        let value = input.value;
+        let originalValue = value;
+        let lastChar = value.slice(-1);
+
+        // Hanya izinkan angka, titik, atau titik dua
+        value = value.replace(/[^0-9.:]/g, '');
+
+        // Jika pengguna mengetik titik atau titik dua, langsung format
+        if ((lastChar === '.' || lastChar === ':') && value.length <= 3 && !value.includes(':')) {
+          let digitsOnly = value.replace(/\D/g, '');
+          if (digitsOnly.length > 0 && digitsOnly.length <= 2) {
+            value = digitsOnly.padStart(2, '0') + ':';
+          }
+        } else {
+          let digits = value.replace(/\D/g, '');
+
+          // Validasi Jam
+          if (digits.length >= 2) {
+            if (parseInt(digits.substring(0, 2)) > 23) {
+              digits = digits.substring(0, 1);
+            }
+          }
+          // Validasi Menit
+          if (digits.length >= 3) {
+            if (parseInt(digits.substring(2, 3)) > 5) {
+              digits = digits.substring(0, 2);
+            }
+          }
+          
+          if (digits.length > 4) {
+            digits = digits.substring(0, 4);
+          }
+
+          // Format otomatis
+          if (digits.length > 2) {
+            value = digits.substring(0, 2) + ':' + digits.substring(2);
+          } else {
+            value = digits;
+          }
+        }
+        
+        input.value = value;
+      }
 
       function generateMonthTable(year, month, attendanceData) {
           const container = document.getElementById('attendance-table-container');
@@ -983,7 +1029,7 @@
           else if (isFutureMonth) lockMessage = 'Anda belum bisa mengisi absensi untuk bulan depan.';
           document.getElementById('global-lock-message').innerText = lockMessage;
           document.getElementById('save-button').disabled = isMonthLocked || isFutureMonth;
-          let tableHTML = '<table><thead><tr><th>Tanggal</th><th>Jam Masuk</th><th>Jam Pulang</th><th>Keterangan</th><th>Aksi</th></tr></thead><tbody>';
+          let tableHTML = '<div class="table-scroll-wrapper"><table><thead><tr><th>Tanggal</th><th>Jam Masuk</th><th>Jam Pulang</th><th>Keterangan</th><th>Aksi</th></tr></thead><tbody>';
           
           for (let day = 1; day <= daysInMonth; day++) {
             const dateStr = `${currentMonthStr}-${String(day).padStart(2, '0')}`;
@@ -1001,14 +1047,14 @@
               tableHTML += `<tr id="row-${dateStr}" class="sunday-row"><td>${day} <small>(${dayName})</small></td><td colspan="3">Hari Libur</td><td></td></tr>`;
             } 
             else if (isTeacherHoliday && (!existingData || (existingData.checkIn === "" && existingData.checkOut === "" && existingData.reason === ""))) {
-                tableHTML += `<tr id="row-${dateStr}"><td>${day} <small>(${dayName})</small></td><td><input type="time" id="in-${dateStr}" disabled></td><td><input type="time" id="out-${dateStr}" disabled></td><td><select id="reason-${dateStr}" onchange="handleReasonChange(event)">${teacherHolidayReasonOptions}</select></td><td><button class="clear-btn" onclick="handleClearRow(event)">Hapus</button></td></tr>`;
+                tableHTML += `<tr id="row-${dateStr}"><td>${day} <small>(${dayName})</small></td><td><input type="text" class="time-entry" id="in-${dateStr}" disabled></td><td><input type="text" class="time-entry" id="out-${dateStr}" disabled></td><td><select id="reason-${dateStr}" onchange="handleReasonChange(event)">${teacherHolidayReasonOptions}</select></td><td><button class="clear-btn" onclick="handleClearRow(event)">Hapus</button></td></tr>`;
             }
             else {
               const isDisabled = isMonthLocked || isFutureMonth;
-              tableHTML += `<tr id="row-${dateStr}"><td>${day} <small>(${dayName})</small></td><td><input type="time" id="in-${dateStr}" ${isDisabled ? 'disabled' : ''}></td><td><input type="time" id="out-${dateStr}" ${isDisabled ? 'disabled' : ''}></td><td><select id="reason-${dateStr}" ${isDisabled ? 'disabled' : ''} onchange="handleReasonChange(event)">${reasonOptions}</select></td><td><button class="clear-btn" onclick="handleClearRow(event)" ${isDisabled ? 'disabled' : ''}>Hapus</button></td></tr>`;
+              tableHTML += `<tr id="row-${dateStr}"><td>${day} <small>(${dayName})</small></td><td><input type="text" class="time-entry" id="in-${dateStr}" placeholder="HH:MM" maxlength="5" inputmode="numeric" oninput="handleTimeInput(event)" ${isDisabled ? 'disabled' : ''}></td><td><input type="text" class="time-entry" id="out-${dateStr}" placeholder="HH:MM" maxlength="5" inputmode="numeric" oninput="handleTimeInput(event)" ${isDisabled ? 'disabled' : ''}></td><td><select id="reason-${dateStr}" ${isDisabled ? 'disabled' : ''} onchange="handleReasonChange(event)">${reasonOptions}</select></td><td><button class="clear-btn" onclick="handleClearRow(event)" ${isDisabled ? 'disabled' : ''}>Hapus</button></td></tr>`;
             }
           }
-          tableHTML += '</tbody></table>';
+          tableHTML += '</tbody></table></div>';
           container.innerHTML = tableHTML;
           populateAttendanceData(attendanceData);
       }
@@ -1020,6 +1066,7 @@
           const reasonSelect = document.getElementById(`reason-${date}`);
           if (checkInInput) checkInInput.value = data[date].checkIn;
           if (checkOutInput) checkOutInput.value = data[date].checkOut;
+
           if (reasonSelect) {
             reasonSelect.value = data[date].reason || "";
             if (data[date].reason) {
@@ -1034,7 +1081,7 @@
         const selectElement = event.target;
         const hasReason = selectElement.value !== "";
         const row = selectElement.closest('tr');
-        const timeInputs = row.querySelectorAll('input[type="time"]');
+        const timeInputs = row.querySelectorAll('.time-entry');
         timeInputs.forEach(input => {
           input.disabled = hasReason;
           if (hasReason) input.value = '';
@@ -1044,7 +1091,7 @@
       function handleClearRow(event) {
         event.preventDefault();
         const row = event.target.closest('tr');
-        const timeInputs = row.querySelectorAll('input[type="time"]');
+        const timeInputs = row.querySelectorAll('.time-entry');
         const reasonSelect = row.querySelector('select');
         timeInputs.forEach(input => {
           input.value = '';
@@ -1066,40 +1113,30 @@
           const rows = document.querySelectorAll('#attendance-table-container tbody tr');
           let validationError = false;
           let firstErrorRow = null;
+          const timeRegex = /^(?:2[0-3]|[01]?[0-9]):[0-5][0-9]$/;
 
           rows.forEach(row => {
               const date = row.id.replace('row-', '');
-              if (!date || !row.querySelector('input[type="time"]')) return;
+              if (!date || !row.querySelector('.time-entry')) return;
 
-              const checkInInput = row.querySelector('input[type="time"]');
-              const checkOutInput = row.querySelectorAll('input[type="time"]')[1];
+              const checkInInput = row.querySelector(`#in-${date}`);
+              const checkOutInput = row.querySelector(`#out-${date}`);
               const reasonSelect = row.querySelector('select');
-
-              let checkIn = checkInInput ? checkInInput.value : "";
-              let checkOut = checkOutInput ? checkOutInput.value : "";
-
-              const formatToHHMM = (time) => {
-                if (time && time.includes(':')) {
-                  let parts = time.split(':');
-                  if (parts[0].length === 1) { parts[0] = '0' + parts[0]; }
-                  if (parts[1] && parts[1].length === 1) { parts[1] = '0' + parts[1]; }
-                  return parts.join(':');
-                }
-                return time;
-              };
               
-              checkIn = formatToHHMM(checkIn);
-              checkOut = formatToHHMM(checkOut);
-
+              const checkIn = checkInInput ? checkInInput.value : "";
+              const checkOut = checkOutInput ? checkOutInput.value : "";
               const reason = reasonSelect ? reasonSelect.value : "";
-              const hasCheckIn = checkIn && checkIn.trim() !== "";
-              const hasCheckOut = checkOut && checkOut.trim() !== "";
-              const hasReason = reason && reason.trim() !== "";
 
-              if (!hasReason && ((hasCheckIn && !hasCheckOut) || (!hasCheckIn && hasCheckOut))) {
+              const hasCheckIn = checkIn.trim() !== "";
+              const hasCheckOut = checkOut.trim() !== "";
+              const hasReason = reason.trim() !== "";
+
+              if (!hasReason) {
+                if ((hasCheckIn && !timeRegex.test(checkIn)) || (hasCheckOut && !timeRegex.test(checkOut)) || (hasCheckIn && !hasCheckOut) || (!hasCheckIn && hasCheckOut)) {
                   validationError = true;
                   row.classList.add('invalid-row');
                   if (!firstErrorRow) firstErrorRow = row;
+                }
               }
 
               payload.attendance[date] = { 
@@ -1110,7 +1147,7 @@
           });
 
           if (validationError) {
-              displayMessage('save-message', "Gagal: Mohon lengkapi pasangan Jam Masuk & Pulang pada baris yang ditandai merah.");
+              displayMessage('save-message', "Gagal: Mohon lengkapi pasangan jam atau perbaiki format waktu (HH:MM) pada baris merah.");
               if (firstErrorRow) {
                   firstErrorRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
               }
