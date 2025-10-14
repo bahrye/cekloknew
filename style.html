@@ -97,6 +97,13 @@
     font-weight: 600;
     cursor: pointer;
     transition: background-color 0.3s, transform 0.2s, box-shadow 0.3s;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+  }
+  
+  button i {
+      margin-right: 8px;
   }
 
   button:hover:not(:disabled) {
@@ -734,4 +741,25 @@
     }
   }
 
+  /* --- Efek Api untuk Alpa --- */
+  @keyframes fire-glow {
+    0% {
+      box-shadow: 0 0 5px #F59E0B, 0 0 10px #F59E0B, 0 0 15px #EF4444;
+    }
+    50% {
+      box-shadow: 0 0 10px #F59E0B, 0 0 20px #EF4444, 0 0 25px #DC2626;
+    }
+    100% {
+      box-shadow: 0 0 5px #F59E0B, 0 0 10px #F59E0B, 0 0 15px #EF4444;
+    }
+  }
+
+  .summary-item.alpa-warning {
+    border-color: #EF4444;
+    animation: fire-glow 2s infinite ease-in-out;
+  }
+
+  #announcement-section h3 i, #staff-announcement-section h3 i {
+    margin-right: 10px; /* Memberi jarak antara ikon dan teks */
+  }
 </style>
