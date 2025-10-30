@@ -53,6 +53,18 @@
             <p id="announcement-text">Tidak ada pengumuman saat ini.</p>
           </div>
 
+          <div id="geo-status-box" class="card-section processing">
+            <div id="geo-status-header">
+              <h3><i class="fa-solid fa-location-dot"></i> Status Lokasi</h3>
+              <button id="refresh-geo-button" onclick="runDashboardGeoCheck()">
+                <i class="fa-solid fa-rotate"></i>
+                <span>Refresh</span>
+              </button>
+            </div>
+            <h4 id="geo-status-message">Memuat...</h4>
+            <p id="geo-status-details">Mencari pengaturan sekolah...</p>
+          </div>
+
           <div id="summary-section">
               <div class="summary-title">
                   <h3>Ringkasan Bulanan</h3>
@@ -114,12 +126,12 @@
           <button onclick="handleGuruDownloadRekap()" id="guru-download-rekap-button" class="action-button">
               <i class="fa-solid fa-file-pdf"></i> <span>Buat & Unduh Rekap Saya</span>
           </button>
-          <button onclick="handleGuruDownloadAllRekap()" id="guru-download-all-rekap-button" class="action-button secondary">
+          <button onclick="handleGuruDownloadAllRekap()" id="guru-download-all-rekap-button" class="action-button secondary" style="margin-bottom: 0;">
               <i class="fa-solid fa-file-zipper"></i> <span>Unduh Rekap Semua Guru (Satu Sekolah)</span>
           </button>
-
-          <p id="guru-rekap-message" class="message" style="margin-top: 5px;"></p>
-          <hr style="margin: 25px 0;">
+          <p id="guru-rekap-message" class="message" style="margin-top: 5px; margin-bottom: 0;"></p>
+          
+          <hr style="margin: 0 0 25px 0;">
 
           <h3>MENU UTAMA</h3>
           <div class="dashboard-actions" style="margin-top: 10px;">
@@ -267,6 +279,10 @@
             </div>
             <div id="attendance-table-container"></div>
 
+            <p id="geo-lock-message" class="message" style="display:none; color: var(--danger-color); background-color: #FEF2F2; border-radius: 8px; padding: 10px 15px; margin-top: 15px;"></p>
+            <button id="retry-geo-button" onclick="checkGeolocation()" class="action-button secondary" style="display:none; width: auto; padding: 10px 18px; margin-top: 10px;">
+                <i class="fa-solid fa-location-crosshairs"></i> <span>Verifikasi Ulang Lokasi</span>
+            </button>
             <button id="save-button" onclick="handleSave()" disabled><i class="fa-solid fa-floppy-disk"></i> <span>Simpan Semua Perubahan</span></button>
             <button id="request-change-button" onclick="handleRequestChange()" style="display: none;"><i class="fa-solid fa-paper-plane"></i> <span>Ajukan Perubahan</span></button>
             <div id="rejection-details-wrapper"></div>
@@ -346,10 +362,19 @@
 
                   <h3>Kunci Absensi</h3>
                   <div class="input-group">
-                      <label for="locked-months">Masukkan bulan yang dikunci (pisahkan koma, format: YYYY-MM)</label>
-                      <input type="text" id="locked-months" placeholder="Contoh: 2024-08,2024-12">
+                      <label for="locked-months">Kunci Bulan Berjalan (opsional, format: YYYY-MM)</label>
+                      <input type="text" id="locked-months" placeholder="Contoh: 2024-10 (jika ingin mengunci Oktober)">
+                      <p style="font-size: 12px; margin-top: 5px; color: var(--text-secondary-color);">Hanya masukkan bulan berjalan jika ingin mengunci pengisian absensi di bulan tersebut.</p>
                       <button onclick="saveLockedMonthsSettings()" style="width: auto; margin-top: 10px;"><i class="fa-solid fa-floppy-disk"></i> <span>Simpan Bulan Terkunci</span></button>
                       <p id="locked-months-message" class="message"></p>
+                  </div>
+
+                  <div class="input-group">
+                      <label for="opened-months">Buka Kunci Bulan Lalu (format: YYYY-MM, pisahkan koma)</label>
+                      <input type="text" id="opened-months" placeholder="Contoh: 2024-09,2024-08">
+                       <p style="font-size: 12px; margin-top: 5px; color: var(--text-secondary-color);">Masukkan bulan-bulan lalu yang ingin dibuka kembali agar bisa diedit oleh semua guru.</p>
+                      <button onclick="saveOpenedMonthsSettings()" style="width: auto; margin-top: 10px;"><i class="fa-solid fa-floppy-disk"></i> <span>Simpan Bulan Dibuka</span></button>
+                      <p id="opened-months-message" class="message"></p>
                   </div>
 
                   <hr style="margin: 25px 0;">
@@ -510,19 +535,22 @@
       let currentUser = null;
       let selectedSchool = null;
       let currentDate = new Date();
-      // --- AWAL PERUBAHAN: Penambahan Variabel Global ---
+
+      // --- AWAL MODIFIKASI: appSettings ---
       let appSettings = {
-        lockedMonths: [],
+        // lockedMonths: [], // Tidak perlu lagi di sisi client
+        openedMonths: [], // Tambahkan ini
         holidays: {},
         announcements: "",
         teacherHolidays: [],
-        // Data baru untuk fitur pengajuan
+        isMonthLocked: true, // Tambahkan boolean ini
         isRequestableMonth: false,
         pendingChanges: {},
         rejectionInfo: null,
-        rejectedChanges: []
+        rejectedChanges: [],
+        hasGeoBypass: false // <-- TAMBAHKAN INI
       };
-      // --- AKHIR PERUBAHAN ---
+      // --- AKHIR MODIFIKASI ---
 
       let selectedTeacherForStaff = null;
       let schoolTeachers = [];
@@ -531,6 +559,13 @@
 
       // Variabel global untuk melacak toast "processing"
       let processingToastId = null;
+
+      // ===================================================================
+      // 1. TAMBAHKAN VARIABEL GLOBAL BARU INI
+      // ===================================================================
+      let currentSchoolSettings = {};
+      let isUserInLocation = false;
+      let settingsPollInterval = null;
 
       // --- TAMBAHAN BARU: Fungsi untuk membuat toast swipeable ---
       function makeToastDismissable(toast) {
@@ -646,6 +681,24 @@
         const toastContainer = document.getElementById('toast-container');
         if (!toastContainer) return; // Keluar jika container tidak ada
         
+        // === AWAL PERBAIKAN ===
+        // 1. Cek jika 'text' kosong DAN ini BUKAN pesan 'processing'
+        if (!text && !isProcessing) {
+          // Jika ada toast "processing" yang aktif, hapus itu.
+          if (processingToastId) {
+            const processingToast = document.getElementById(processingToastId);
+            if (processingToast) {
+              // Hapus dengan animasi fade out (animasi ini sudah ada di CSS Anda)
+              processingToast.classList.add('toast-fade-out');
+              // Hapus dari DOM setelah animasi
+              setTimeout(() => processingToast.remove(), 400); 
+            }
+            processingToastId = null; // Kosongkan ID pelacak
+          }
+          return; // Hentikan fungsi di sini. Tidak perlu membuat toast baru.
+        }
+        // === AKHIR PERBAIKAN ===
+        
         // 1. Tentukan status (class) dan ikon
         let statusClass = '';
         let iconHtml = '';
@@ -682,9 +735,7 @@
           toast.innerHTML = `${iconHtml} <span>${text}</span>`;
           toastContainer.appendChild(toast);
           
-          // --- TAMBAHAN BARU ---
           makeToastDismissable(toast); // Buat toast "processing" bisa di-swipe
-          // --- AKHIR TAMBAHAN ---
         } 
         // 3. Jika ini pesan "success" atau "error"
         else {
@@ -698,19 +749,15 @@
               processingToast.id = '';
               
               // Set timeout untuk menghilangkannya
-              // --- PERUBAHAN: Simpan timer di elemen ---
               const newTimer = setTimeout(() => {
                 processingToast.classList.add('toast-fade-out');
                 setTimeout(() => processingToast.remove(), 400); // 0.4s (sesuai transisi CSS)
               }, 4000); // 4 detik
               processingToast.autoDismissTimer = newTimer; // Simpan timer di elemen
-              // --- AKHIR PERUBAHAN ---
               
               processingToastId = null; // Kosongkan pelacak
               
-              // --- TAMBAHAN BARU ---
               makeToastDismissable(processingToast); // Buat toast yang baru diganti ini bisa di-swipe
-              // --- AKHIR TAMBAHAN ---
             }
           } else {
             // Jika tidak ada toast processing, buat toast baru
@@ -720,17 +767,13 @@
             toastContainer.appendChild(toast);
             
             // Set timeout untuk menghilangkannya
-            // --- PERUBAHAN: Simpan timer di elemen ---
             const newTimer = setTimeout(() => {
               toast.classList.add('toast-fade-out');
               setTimeout(() => toast.remove(), 400);
             }, 4000); // 4 detik
             toast.autoDismissTimer = newTimer; // Simpan timer di elemen
-            // --- AKHIR PERUBAHAN ---
 
-            // --- TAMBAHAN BARU ---
             makeToastDismissable(toast); // Buat toast baru ini bisa di-swipe
-            // --- AKHIR TAMBAHAN ---
           }
         }
       }
@@ -752,6 +795,10 @@
           // --- AKHIR TAMBAHAN ---
 
           document.getElementById('sptjm-settings-container').style.display = 'block';
+
+          // --- TAMBAHKAN BARIS INI ---
+          history.pushState(null, null, location.href);
+          // --- AKHIR TAMBAHAN ---
 
           const saveButton = document.getElementById('save-sptjm-settings-button');
           saveButton.disabled = true; // Nonaktifkan tombol saat halaman dibuka
@@ -852,6 +899,10 @@
       function showSptjmViewPage() {
           document.getElementById('lkh-sptjm-dashboard-container').style.display = 'none';
           document.getElementById('sptjm-view-container').style.display = 'block';
+
+          // --- TAMBAHKAN BARIS INI ---
+          history.pushState(null, null, location.href);
+          // --- AKHIR TAMBAHAN ---
 
           // 1. Dapatkan elemen tombol dan pesan
           const downloadButton = document.getElementById('download-sptjm-pdf-button');
@@ -999,6 +1050,11 @@
       function showLkhWeeklyPage() {
         document.getElementById("lkh-sptjm-dashboard-container").style.display = "none";
         document.getElementById("lkh-weekly-container").style.display = "block";
+
+        // --- TAMBAHKAN BARIS INI ---
+        history.pushState(null, null, location.href);
+        // --- AKHIR TAMBAHAN ---
+
         generateLkhWeeklyForm();
       }
 
@@ -1095,6 +1151,44 @@
       document.addEventListener('DOMContentLoaded', () => {
         // --- AWAL PERUBAHAN: Set Tahun Otomatis ---
         document.getElementById('currentYear').textContent = new Date().getFullYear();
+        // --- AKHIR PERUBAHAN ---
+
+        // --- AWAL PERUBAHAN: Logika Tombol Kembali Ponsel (VERSI 2) ---
+        window.addEventListener('popstate', function(event) {
+            // Fungsi ini akan dipicu oleh tombol kembali browser/ponsel.
+            // Kita periksa halaman apa yang sedang aktif.
+
+            // 1. Cek sub-menu LKH (paling dalam)
+            if (document.getElementById('sptjm-settings-container').style.display === 'block' ||
+                document.getElementById('lkh-container').style.display === 'block' ||
+                document.getElementById('lkh-weekly-container').style.display === 'block' ||
+                document.getElementById('sptjm-view-container').style.display === 'block' ||
+                document.getElementById('lkh-view-container').style.display === 'block') {
+                
+                // Jika di sub-menu LKH, kembali ke dasbor LKH
+                // JANGAN pushState di sini, kita hanya menampilkan
+                showLkhSptjmDashboard();
+            } 
+            // 2. Cek halaman "level 1" (Ceklok, Dasbor LKH, Pengaturan Libur, dll.)
+            else if (
+                document.getElementById('ceklok-container').style.display === 'block' ||
+                document.getElementById('teacher-holiday-settings-container').style.display === 'block' ||
+                document.getElementById('emis-import-container').style.display === 'block' ||
+                document.getElementById('emis-export-container').style.display === 'block' ||
+                document.getElementById('all-teachers-summary-container').style.display === 'block' ||
+                document.getElementById('change-request-container').style.display === 'block' ||
+                document.getElementById('lkh-sptjm-dashboard-container').style.display === 'block'
+            ) {
+                // Jika di halaman-halaman ini, kembali ke dasbor utama
+                // JANGAN panggil goBackToDashboard() karena itu akan pushState
+                // Cukup tampilkan dasbor yang sesuai secara manual
+                if (currentUser.role === 'admin') showAdminDashboard();
+                else if (currentUser.role === 'staff') showStaffDashboard();
+                else showGuruDashboard();
+            }
+            // 3. Jika kita ada di dasbor utama (atau halaman login),
+            // biarkan browser melakukan aksi default-nya (yaitu keluar dari aplikasi).
+        });
         // --- AKHIR PERUBAHAN ---
 
         const token = localStorage.getItem('ceklokAuthToken');
@@ -1240,6 +1334,10 @@
             select.appendChild(option);
         });
         document.getElementById('school-selection-container').style.display = 'block';
+
+        // --- TAMBAKAH BARIS INI ---
+        history.pushState(null, null, location.href);
+        // --- AKHIR TAMBAHAN ---
       }
 
       function handleSchoolSelection() {
@@ -1257,17 +1355,17 @@
         }
       }
 
+// ===================================================================
+      // 4. GANTI FUNGSI LAMA (handleLogout) DENGAN INI
+      // ===================================================================
       function handleLogout() {
-        // --- PERUBAHAN DIMULAI ---
         const token = localStorage.getItem('ceklokAuthToken');
         if(token) {
-          // Panggil server untuk menghapus token
           google.script.run.userLogout(token);
         }
         localStorage.removeItem('ceklokUser');
         localStorage.removeItem('ceklokSelectedSchool');
         localStorage.removeItem('ceklokAuthToken');
-        // --- PERUBAHAN SELESAI ---
 
         currentUser = null;
         selectedSchool = null;
@@ -1275,14 +1373,24 @@
         selectedTeacherForStaff = null;
         schoolTeachers = [];
 
-        // --- AWAL PERUBAHAN: Reset appSettings ---
         appSettings = {
           lockedMonths: [], holidays: {}, announcements: "", teacherHolidays: [],
           isRequestableMonth: false, pendingChanges: {}, rejectionInfo: null, rejectedChanges: []
         };
-        // --- AKHIR PERUBAHAN ---
 
-        // Pastikan kontainer login dikembalikan ke bentuk aslinya
+        // === AWAL PERUBAHAN (Sesuai Permintaan) ===
+        // Hentikan polling saat logout
+        if (settingsPollInterval) {
+          clearInterval(settingsPollInterval);
+          settingsPollInterval = null;
+        }
+        // === AKHIR PERUBAHAN ===
+        
+        // --- TAMBAHAN BARU ---
+        currentSchoolSettings = {};
+        isUserInLocation = false;
+        // --- AKHIR TAMBAHAN ---
+
         const loginContainer = document.getElementById("login-container");
         loginContainer.innerHTML = `
            <form id="login-form" onsubmit="event.preventDefault(); handleLogin();">
@@ -1293,7 +1401,6 @@
                   <label for="email">Email</label>
                   <input type="email" id="email" placeholder="Masukkan email Anda" autocomplete="username">
                 </div>
-
                 <div class="input-group">
                   <label for="password">Password</label>
                   <div class="password-wrapper">
@@ -1307,8 +1414,6 @@
            </form>
         `;
 
-        // ==== TAMBAHAN KODE SAAT LOGOUT ====
-        // Kita harus mendaftarkan ulang event listener untuk form login yang baru dibuat
         const emailInput = document.getElementById('email');
         const passwordInput = document.getElementById('password');
         const toggleIcon = document.getElementById('togglePassword');
@@ -1330,7 +1435,6 @@
             this.classList.toggle('fa-eye-slash');
           });
         }
-        // ==== AKHIR TAMBAHAN ====
 
         loginContainer.style.display = "block";
         document.getElementById("school-selection-container").style.display = "none";
@@ -1348,9 +1452,11 @@
         document.getElementById("lkh-view-container").style.display = "none";
         document.getElementById("lkh-weekly-container").style.display = "none";
         document.getElementById("all-teachers-summary-container").style.display = "none";
-        // --- AWAL PERUBAHAN: Sembunyikan container baru ---
         document.getElementById("change-request-container").style.display = "none";
-        // --- AKHIR PERUBAHAN ---
+        
+        // --- TAMBAHAN BARU ---
+        document.getElementById("geo-lock-message").style.display = "none"; // Sembunyikan pesan geo
+        // --- AKHIR TAMBAHAN ---
 
         displayMessage('login-message', "Anda berhasil logout.", { isSuccess: true });
       }
@@ -1381,10 +1487,12 @@
           document.getElementById("lkh-sptjm-dashboard-container").style.display = "none";
           document.getElementById("lkh-weekly-container").style.display = "none";
           document.getElementById("all-teachers-summary-container").style.display = "none";
-          // --- AWAL PERUBAHAN: Sembunyikan container baru ---
           document.getElementById("change-request-container").style.display = "none";
-          // --- AKHIR PERUBAHAN ---
           document.getElementById("guru-dashboard-container").style.display = "block";
+
+          // --- TAMBAHKAN BARIS INI ---
+          history.pushState(null, null, location.href);
+          // --- AKHIR TAMBAHAN ---
 
           const welcomeH2 = document.getElementById('guru-welcome-message');
           let welcomeHTML = `Halo, <strong>${currentUser.name}</strong>`;
@@ -1406,10 +1514,35 @@
           // Tampilkan loading untuk pengumuman
           renderAnnouncements("Memuat pengumuman...", true);
 
-          google.script.run.withSuccessHandler(response => {
-              renderAnnouncements(response.announcements);
+          // Panggil getAttendancePageData untuk mendapatkan *semua* pengaturan (termasuk schoolSettings)
+          google.script.run
+            .withSuccessHandler(response => {
+              if (response && response.error) {
+                renderAnnouncements("Gagal memuat pengaturan.");
+                document.getElementById('geo-status-box').style.display = 'none'; // Sembunyikan jika gagal
+                return;
+              }
+              // Simpan semua pengaturan
               appSettings = response;
-          }).getAppSettingsForUser(currentUser.email, selectedSchool, currentDate.getFullYear(), currentDate.getMonth() + 1);
+              currentSchoolSettings = response.schoolSettings || {};
+              
+              // Render pengumuman
+              renderAnnouncements(response.announcements);
+              
+              // === LOGIKA BARU: Mulai verifikasi lokasi ===
+              runDashboardGeoCheck(); 
+              // ==========================================
+
+              // === AWAL PERUBAHAN (Sesuai Permintaan) ===
+              // Mulai polling untuk pengaturan SETELAH semua data awal dimuat.
+              startSettingsPolling();
+              // === AKHIR PERUBAHAN ===
+            })
+            .withFailureHandler(error => {
+               renderAnnouncements(`Gagal memuat pengaturan: ${error.message}`);
+               document.getElementById('geo-status-box').style.display = 'none'; // Sembunyikan jika gagal
+            })
+            .getAttendancePageData(currentUser.email, selectedSchool, currentDate.getFullYear(), currentDate.getMonth() + 1, 0); // Token 0 tidak masalah, hanya untuk ambil settings
 
           loadAndRenderSummary();
       }
@@ -1443,6 +1576,15 @@
           localStorage.setItem('ceklokSelectedSchool', selectedSchool);
           // --- PERUBAHAN SELESAI ---
 
+          // === AWAL PERUBAHAN (Sesuai Permintaan) ===
+          // Hentikan polling lama. Polling baru akan
+          // dimulai otomatis oleh showGuruDashboard.
+          if (settingsPollInterval) {
+            clearInterval(settingsPollInterval);
+            settingsPollInterval = null;
+          }
+          // === AKHIR PERUBAHAN ===
+
           if (currentUser.role === 'guru') {
             showGuruDashboard();
           } else if (currentUser.role === 'staff') {
@@ -1459,6 +1601,10 @@
         document.getElementById("lkh-container").style.display = "none";
         document.getElementById("lkh-view-container").style.display = "none";
         document.getElementById("lkh-weekly-container").style.display = "none";
+
+        // --- TAMBAHKAN BARIS INI ---
+        history.pushState(null, null, location.href);
+        // --- AKHIR TAMBAHAN ---
       }
 
       function showCeklokPage() {
@@ -1467,6 +1613,35 @@
         document.getElementById("ceklok-container").style.display = "block";
         document.getElementById('ceklok-teacher-name').innerText = '';
         document.getElementById('ceklok-title').innerText = `Formulir Kehadiran - ${selectedSchool}`;
+
+        // --- TAMBAHKAN BARIS INI ---
+        history.pushState(null, null, location.href);
+        // --- AKHIR TAMBAHAN ---
+
+        // === LOGIKA BARU: Cek status global ===
+        const isGeoEnabled = currentSchoolSettings.geoEnabled === true;
+        const geoMessage = document.getElementById('geo-lock-message');
+        
+        // --- AWAL PERBAIKAN (Goal 3) ---
+        // Cek apakah kita sedang melihat bulan berjalan
+        const today = new Date();
+        const isCurrentMonthView = currentDate.getFullYear() === today.getFullYear() &&
+                                   currentDate.getMonth() === today.getMonth();
+
+        if (isGeoEnabled && !isUserInLocation && isCurrentMonthView) {
+        // --- AKHIR PERBAIKAN ---
+            
+            // Jika geo aktif DAN status global "di luar lokasi" DAN ini bulan berjalan
+            geoMessage.innerText = "Anda berada di luar jangkauan lokasi. Input Ceklok hari ini dikunci.";
+            geoMessage.style.display = 'block';
+            geoMessage.style.color = 'var(--danger-color)';
+            geoMessage.style.backgroundColor = '#FEF2F2';
+        } else {
+            // Jika geo nonaktif ATAU pengguna di dalam lokasi ATAU ini bulan lalu/depan
+            geoMessage.style.display = 'none';
+        }
+        // ====================================
+
         loadMonthData(currentDate);
       }
 
@@ -1476,6 +1651,11 @@
           document.getElementById("emis-import-container").style.display = "none";
           document.getElementById("emis-export-container").style.display = "none";
           document.getElementById("teacher-holiday-settings-container").style.display = "block";
+
+          // --- TAMBAHKAN BARIS INI ---
+          history.pushState(null, null, location.href);
+          // --- AKHIR TAMBAHAN ---
+
           document.getElementById('teacher-holiday-title').innerText = `Pengaturan Hari Libur - ${selectedSchool}`;
           renderTeacherHolidaySwitches();
           loadTeacherHolidays();
@@ -1484,6 +1664,11 @@
       function showEmisImportPage() {
         document.getElementById("guru-dashboard-container").style.display = "none";
         document.getElementById("emis-import-container").style.display = "block";
+
+        // --- TAMBAHKAN BARIS INI ---
+        history.pushState(null, null, location.href);
+        // --- AKHIR TAMBAHAN ---
+
         document.getElementById('emis-import-teacher-name').innerText = '';
         document.getElementById('emis-import-title').innerText = `Import Data Kehadiran EMIS - ${selectedSchool}`;
       }
@@ -1491,6 +1676,11 @@
       function showEmisExportPage() {
         document.getElementById("guru-dashboard-container").style.display = "none";
         document.getElementById("emis-export-container").style.display = "block";
+
+        // --- TAMBAHKAN BARIS INI ---
+        history.pushState(null, null, location.href);
+        // --- AKHIR TAMBAHAN ---
+
         document.getElementById('emis-export-teacher-name').innerText = '';
         document.getElementById('emis-export-title').innerText = `Eksport Data Kehadiran - ${selectedSchool}`;
       }
@@ -1512,23 +1702,25 @@
         loadMonthData(currentDate);
       }
 
-      // --- AWAL FUNGSI YANG DIMODIFIKASI BESAR-BESARAN ---
       function loadMonthData(date){
           const year = date.getFullYear();
           const month = date.getMonth() + 1;
+          // Tentukan user target (guru atau staff yang melihat guru lain)
           const userEmail = (currentUser.role === 'staff' && selectedTeacherForStaff) ? selectedTeacherForStaff.email : currentUser.email;
           const schoolForCall = (currentUser.role === 'staff' && selectedTeacherForStaff) ? selectedTeacherForStaff.school : selectedSchool;
+          const viewerEmail = currentUser.email; // <-- 1. TAMBAHKAN INI (Email yang sedang login)
 
-          // --- AWAL PERUBAHAN: Menargetkan kedua tombol ---
+          // Dapatkan referensi tombol
           const saveButton = document.getElementById('save-button');
           const requestButton = document.getElementById('request-change-button');
-          // --- AKHIR PERUBAHAN ---
 
+          // Token untuk mencegah race condition jika user klik bulan bolak-balik
           latestRequestToken++;
           const currentToken = latestRequestToken;
 
+          // Update tampilan nama bulan & tahun
           document.getElementById('month-display').innerText = date.toLocaleString('id-ID', { month: 'long', year: 'numeric' });
-          // Tampilkan loading
+          // Tampilkan indikator loading
           document.getElementById('attendance-table-container').innerHTML = `
             <div class="loader-container">
               <div class="loader">
@@ -1536,52 +1728,53 @@
               </div>
               <p>Memuat data absensi...</p>
             </div>`;
-          // --- AWAL PERUBAHAN: Nonaktifkan kedua tombol ---
+          // Nonaktifkan tombol saat loading
           saveButton.disabled = true;
           requestButton.disabled = true;
-          // --- AKHIR PERUBAHAN ---
 
+          // Panggil fungsi server untuk mendapatkan data
           google.script.run
             .withSuccessHandler(response => {
-              // --- AWAL PERUBAHAN: Cek Error dari Backend ---
+              // Handle jika ada error dari server
               if (response && response.error) {
-                 // Tampilkan pesan error dari backend
                  document.getElementById('attendance-table-container').innerHTML = `<p style="color: var(--danger-color);">${response.error}</p>`;
-                 // Nonaktifkan tombol (opsional, tergantung preferensi)
                  saveButton.disabled = true;
                  requestButton.disabled = true;
-                 return; // Hentikan pemrosesan lebih lanjut
+                 return;
               }
-              // --- AKHIR PERUBAHAN ---
 
-              // Lanjutkan jika tidak ada error backend
-              if (!response || response.token !== latestRequestToken) { // Tambah cek !response
+              // Abaikan response jika token tidak sesuai (user sudah pindah bulan lain)
+              if (!response || response.token !== latestRequestToken) {
                 return;
               }
-              // --- AWAL PERUBAHAN: Simpan semua data baru dari server ---
-              appSettings.attendance = response.attendance;
-              appSettings.lockedMonths = response.lockedMonths;
-              appSettings.holidays = response.holidays;
-              appSettings.teacherHolidays = response.teacherHolidays;
 
-              appSettings.announcements = response.announcements;
+              // Simpan data & pengaturan yang diterima dari server ke variabel global `appSettings`
+              if (response && response.token === latestRequestToken) {
+                  // Simpan state baru dari server
+                  appSettings.attendance = response.attendance || {};
+                  appSettings.holidays = response.holidays || {};
+                  appSettings.teacherHolidays = response.teacherHolidays || [];
+                  appSettings.announcements = response.announcements || "";
+                  appSettings.isMonthLocked = response.isMonthLocked; // Status kunci bulan (baru)
+                  appSettings.isRequestableMonth = response.isRequestableMonth; // Status bisa ajuan
+                  appSettings.pendingChanges = response.pendingChanges || {}; // Data ajuan pending
+                  appSettings.rejectionInfo = response.rejectionInfo; // Info penolakan
+                  appSettings.rejectedChanges = response.rejectedChanges || []; // Detail ajuan ditolak
+                  appSettings.hasGeoBypass = response.hasGeoBypass; // <-- 2. SIMPAN STATUS BYPASS
+                  currentSchoolSettings = response.schoolSettings || {}; // Pengaturan sekolah (termasuk Geo)
+              }
 
-              // Data baru untuk pengajuan
-              appSettings.isRequestableMonth = response.isRequestableMonth;
-              appSettings.pendingChanges = response.pendingChanges;
-              appSettings.rejectionInfo = response.rejectionInfo;
-              appSettings.rejectedChanges = response.rejectedChanges || [];
-              // --- AKHIR PERUBAHAN ---
-
-              generateMonthTable(year, month, response.attendance);
+              // Panggil fungsi untuk membuat tabel HTML berdasarkan data yang baru diterima
+              generateMonthTable(year, month, appSettings.attendance);
             })
             .withFailureHandler(error => {
-                document.getElementById('attendance-table-container').innerHTML = `<p style="color: var(--danger-color);">Gagal memuat data absensi: ${error.message}</p>`; // Tambahkan detail error
-                // Nonaktifkan tombol jika gagal total
+                // Handle jika terjadi error saat memanggil fungsi server
+                document.getElementById('attendance-table-container').innerHTML = `<p style="color: var(--danger-color);">Gagal memuat data absensi: ${error.message}</p>`;
                  saveButton.disabled = true;
                  requestButton.disabled = true;
             })
-            .getAttendancePageData(userEmail, schoolForCall, year, month, currentToken);
+            // Panggil fungsi di Kode.gs untuk mendapatkan semua data sekaligus
+            .getAttendancePageData(userEmail, schoolForCall, year, month, currentToken, viewerEmail); // <-- 3. TAMBAHKAN viewerEmail
       }
 
       function handleTimeInput(event) {
@@ -1630,10 +1823,49 @@
         input.value = value;
       }
 
+      /**
+       * ===================================================================
+       * FUNGSI generateMonthTable DIMODIFIKASI (Versi 2)
+       * ===================================================================
+       * - Menambahkan pesan spesifik untuk bulan lalu yang dibuka/dikunci.
+       * - Menggunakan 'appSettings.isMonthLocked' untuk logika penguncian utama.
+       * - Logika 'isRequestableMonth' tetap digunakan untuk fitur pengajuan.
+       * --- PERUBAHAN BARU ---
+       * - Menggunakan appSettings.hasGeoBypass untuk membuka kunci UI.
+       */
       function generateMonthTable(year, month, attendanceData) {
           const container = document.getElementById('attendance-table-container');
+          const geoMessage = document.getElementById('geo-lock-message');
+          const isGeoEnabled = currentSchoolSettings.geoEnabled === true;
+          const today = new Date();
+          const currentYear = today.getFullYear();
+          const currentMonth = today.getMonth() + 1;
+          const isCurrentMonthView = (year === currentYear && month === currentMonth);
+          const isPastMonthView = year < currentYear || (year === currentYear && month < currentMonth);
 
-          // Opsi standar
+          // --- AWAL PERUBAHAN BYPASS ---
+          // Cek bypass global. 'appSettings.hasGeoBypass' dikirim dari server
+          const hasBypass = appSettings.hasGeoBypass === true;
+          // --- AKHIR PERUBAHAN BYPASS ---
+
+          // Logika pesan Geo-lock
+          if (isGeoEnabled && !isUserInLocation && isCurrentMonthView) {
+              if (hasBypass) { // Jika punya bypass
+                  geoMessage.innerText = "Anda berada di luar jangkauan lokasi. Fitur bypass Staff aktif, Ceklok hari ini dibuka.";
+                  geoMessage.style.display = 'block';
+                  geoMessage.style.color = '#059669'; // Hijau
+                  geoMessage.style.backgroundColor = '#ECFDF5'; // Hijau muda
+              } else { // Jika tidak punya bypass (perilaku normal)
+                  geoMessage.innerText = "Anda berada di luar jangkauan lokasi. Input Ceklok hari ini dikunci.";
+                  geoMessage.style.display = 'block';
+                  geoMessage.style.color = 'var(--danger-color)';
+                  geoMessage.style.backgroundColor = '#FEF2F2';
+              }
+          } else {
+              geoMessage.style.display = 'none';
+          }
+
+          // Opsi alasan cuti/izin
           const reasonOptions = `
               <option value="">-- Pilih Alasan --</option>
               <option value="Hari Libur Sekolah">Hari Libur Sekolah</option>
@@ -1650,96 +1882,111 @@
               <option value="Izin Alasan Penting (Lebih dari 2 Hari)">Izin Alasan Penting (Lebih dari 2 Hari)</option>
               <option value="Izin Sakit (1 hari Sampai Dengan 14 Hari)">Izin Sakit (1 hari Sampai Dengan 14 Hari)</option>
               <option value="Izin Sakit (Lebih dari 14 Hari Sampai Dengan 12 Bulan)">Izin Sakit (Lebih dari 14 Hari Sampai Dengan 12 Bulan)</option>
-              <option value="Izin Sakit (Lebih dari 12 Bulan Sampai Dengan 18 Bulan)">Izin Sakit (Lebih dari 12 Bulan Sampai Dengan 18 Bulan)</option>
+              <option value="Izin Sakit (Lebih dari 18 Bulan)">Izin Sakit (Lebih dari 18 Bulan)</option>
               <option value="Dinas Luar">Dinas Luar</option>
           `;
 
+          // Variabel & Pengecekan Kondisi Bulan
           const daysInMonth = new Date(year, month, 0).getDate();
-          const currentMonthStr = `${year}-${String(month).padStart(2, '0')}`;
-          const isMonthLocked = appSettings.lockedMonths.includes(currentMonthStr);
-          const today = new Date();
-          const currentYear = today.getFullYear();
-          const currentMonth = today.getMonth() + 1;
-          const isFutureMonth = year > currentYear || (year === currentYear && month > currentMonth);
+          const todayStr = jsFormatDate(new Date()); // Format "YYYY-MM-DD"
 
-          // --- AWAL LOGIKA PENGAJUAN ---
-          const isReqMonth = appSettings.isRequestableMonth;
-          const pendingData = appSettings.pendingChanges;
-          
-          // *** Ini adalah SATU-SATUNYA deklarasi untuk isRequestPending ***
-          const isRequestPending = Object.keys(pendingData).length > 0; 
-          
-          const isDisabled = (isMonthLocked && !isReqMonth) || isFutureMonth;
-          // --- AKHIR LOGIKA PENGAJUAN ---
+          const isLocked = appSettings.isMonthLocked; // Status kunci dari server (true/false)
+          const isReqMonth = appSettings.isRequestableMonth; // Status bulan pengajuan (true/false)
+          const pendingData = appSettings.pendingChanges; // Data pengajuan yang sedang diproses
+          const isRequestPending = Object.keys(pendingData).length > 0; // Apakah ada pengajuan pending?
 
+          // Logika Pesan Penguncian Global (ditampilkan di atas tabel)
           let lockMessage = "";
-          if(isReqMonth) {
-            if (isRequestPending) {
-              lockMessage = 'Pengajuan Anda sedang ditinjau oleh Staff.';
-            } else if (appSettings.rejectionInfo) {
-              // Pesan ini akan ditimpa oleh tabel detail di bawah jika ada
-              lockMessage = 'Beberapa pengajuan Anda ditolak. Lihat detail di bawah.';
-            } else {
-              lockMessage = 'Bulan ini terkunci. Klik "Ubah" pada baris untuk mengajukan perubahan.';
-            }
-          } else if(isMonthLocked) {
-            lockMessage = 'Absensi untuk bulan ini telah dikunci.';
-          } else if (isFutureMonth) {
-            lockMessage = 'Anda belum bisa mengisi absensi untuk bulan depan.';
+          if (isGeoEnabled && isCurrentMonthView && !isUserInLocation) {
+              lockMessage = ''; // Kosongkan, karena pesan Geo-lock akan muncul
+          } else if (isReqMonth) { // Jika ini bulan pengajuan (selalu bulan lalu)
+            if (isRequestPending) { lockMessage = 'Pengajuan Anda sedang ditinjau oleh Staff.'; }
+            else if (appSettings.rejectionInfo) { lockMessage = 'Beberapa pengajuan Anda ditolak. Lihat detail di bawah.'; }
+            else { lockMessage = 'Bulan ini terkunci. Klik "Ubah" pada baris untuk mengajukan perubahan.'; }
+          } else if (isPastMonthView) { // Jika ini bulan lalu (tapi BUKAN bulan pengajuan)
+              if (isLocked) { // Jika terkunci (default bulan lalu)
+                  lockMessage = 'Absensi untuk bulan ini telah dikunci oleh Admin.';
+              } else { // Jika TIDAK terkunci (berarti dibuka via opened_months)
+                  lockMessage = 'Bulan ini telah dibuka oleh Admin untuk pengeditan.';
+              }
+          } else if (isLocked) { // Jika bulan ini atau depan terkunci (bukan karena Geo atau pengajuan)
+            lockMessage = 'Absensi untuk bulan ini telah dikunci oleh Admin.';
+          }
+          document.getElementById('global-lock-message').innerText = lockMessage;
+          // Tambahkan class untuk styling (opsional)
+          const lockMessageElement = document.getElementById('global-lock-message');
+          
+          // 1. Hapus SEMUA kelas status, termasuk 'danger-message' yang baru
+          lockMessageElement.classList.remove('info-message', 'warning-message', 'danger-message'); 
+
+          if (isPastMonthView && !isLocked && !isReqMonth) {
+              // 2. Kondisi HIJAU (Bulan lalu dibuka)
+              lockMessageElement.classList.add('info-message');
+          } else if (isReqMonth && !isRequestPending && !appSettings.rejectionInfo){
+              // 3. Kondisi KUNING (Bulan pengajuan)
+              lockMessageElement.classList.add('warning-message');
+          } else if (lockMessage.trim() !== '') { 
+              // 4. Kondisi MERAH (Semua kasus lain di mana ada pesan terkunci)
+              lockMessageElement.classList.add('danger-message');
           }
 
-          document.getElementById('global-lock-message').innerText = lockMessage;
-
-          // --- LOGIKA TOMBOL UTAMA ---
+          // Logika Tampilan Tombol Simpan/Ajukan (di bawah tabel)
           const saveButton = document.getElementById('save-button');
           const requestButton = document.getElementById('request-change-button');
 
+          // Jika ini adalah bulan pengajuan
           if (isReqMonth) {
-            saveButton.style.display = 'none';
-            requestButton.style.display = 'inline-flex';
-            requestButton.disabled = false;
-            if (isRequestPending) {
-              requestButton.innerHTML = '<i class="fa-solid fa-ban"></i> <span>Batalkan Ajuan</span>';
-              requestButton.className = 'action-button cancel-request';
-              requestButton.onclick = handleCancelRequest;
-            } else {
-              requestButton.innerHTML = '<i class="fa-solid fa-paper-plane"></i> <span>Ajukan Perubahan</span>';
-              requestButton.className = 'action-button';
-              requestButton.onclick = handleRequestChange;
-            }
-          } else {
-            saveButton.style.display = 'inline-flex';
-            requestButton.style.display = 'none';
-            saveButton.disabled = isDisabled;
+              saveButton.style.display = 'none'; // Sembunyikan tombol Simpan
+              requestButton.style.display = 'inline-flex'; // Tampilkan tombol Ajukan/Batal
+              requestButton.disabled = false; // Aktifkan tombol (secara default)
+              if (isRequestPending) { // Jika ada ajuan pending
+                requestButton.innerHTML = '<i class="fa-solid fa-ban"></i> <span>Batalkan Ajuan</span>';
+                requestButton.className = 'action-button cancel-request'; // Style merah
+                requestButton.onclick = handleCancelRequest; // Fungsi pembatalan
+              } else { // Jika belum ada ajuan
+                requestButton.innerHTML = '<i class="fa-solid fa-paper-plane"></i> <span>Ajukan Perubahan</span>';
+                requestButton.className = 'action-button'; // Style normal (kuning)
+                requestButton.onclick = handleRequestChange; // Fungsi pengajuan
+              }
+          }
+          // Jika ini bukan bulan pengajuan (bulan normal, bulan lalu, atau bulan depan)
+          else {
+              saveButton.style.display = 'inline-flex'; // Tampilkan tombol Simpan
+              requestButton.style.display = 'none'; // Sembunyikan tombol Ajukan
+              
+              // --- AWAL PERUBAHAN BYPASS ---
+              // Tombol Simpan dinonaktifkan jika:
+              // 1. Bulan ini terkunci (isLocked = true), ATAU
+              // 2. (SEMUA KONDISI INI):
+              //    a. Geo-lock aktif (isGeoEnabled=true)
+              //    b. Ini bulan berjalan (isCurrentMonthView=true)
+              //    c. User di luar lokasi (!isUserInLocation)
+              //    d. DAN User TIDAK punya bypass (!hasBypass)
+              saveButton.disabled = isLocked || (isGeoEnabled && isCurrentMonthView && !isUserInLocation && !hasBypass);
+              // --- AKHIR PERUBAHAN BYPASS ---
           }
 
-          // --- BLOK BARU UNTUK MENAMPILKAN TABEL PENOLAKAN (SESUAI PERBAIKAN) ---
-          const messageElement = document.getElementById('save-message');
-          const rejectionWrapper = document.getElementById('rejection-details-wrapper'); // 1. Ambil wrapper baru
+          // Logika Menampilkan Detail Penolakan (jika ada)
+          const messageElement = document.getElementById('save-message'); // Pesan di bawah tombol simpan/ajukan
+          const rejectionWrapper = document.getElementById('rejection-details-wrapper'); // Kontainer untuk tabel penolakan
+          messageElement.innerHTML = ''; // Kosongkan pesan lama
+          rejectionWrapper.innerHTML = ''; // Kosongkan detail penolakan lama
+          const rejectedItems = appSettings.rejectedChanges || []; // Ambil data ajuan ditolak
 
-          messageElement.innerHTML = ''; // Selalu bersihkan pesan lama
-          rejectionWrapper.innerHTML = ''; // 2. Bersihkan wrapper tabel
-
-          const rejectedItems = appSettings.rejectedChanges || [];
-          
-          // Tampilkan tabel penolakan JIKA ada item yang ditolak
-          // DAN TIDAK ADA item lain yang sedang pending
-          // (Menggunakan 'isRequestPending' yang sudah dideklarasikan di atas)
+          // Jika ini bulan pengajuan DAN ada ajuan yang ditolak
           if (isReqMonth && rejectedItems.length > 0) {
-              
+              // Fungsi helper untuk memformat data lama/baru di tabel penolakan
               const formatData = (data) => {
                 if (data.reason) return `<strong>Alasan:</strong> ${data.reason}`;
                 if (!data.checkIn && !data.checkOut) return `<em>(Kosong)</em>`;
                 return `<strong>M:</strong> ${data.checkIn || '-'} | <strong>P:</strong> ${data.checkOut || '-'}`;
               };
-
-              // --- PERUBAHAN DIMULAI DI SINI ---
+              // Buat HTML tabel penolakan
               let rejectionHtml = `
                 <div class="rejection-details-container">
                   <h4 class="rejection-title">Detail Pengajuan Ditolak</h4>
                   <p class="rejection-subtitle">Data berikut telah ditolak oleh Staff. Anda dapat mengubah dan mengajukannya kembali.</p>
-                  
-                  <div class="table-scroll-wrapper"> 
+                  <div class="table-scroll-wrapper">
                     <table class="rejection-table">
                       <thead>
                         <tr>
@@ -1751,11 +1998,11 @@
                       </thead>
                       <tbody>
               `;
-              
+              // Fungsi helper untuk format tanggal (hanya angka hari)
               const formatDateTgl = (dateStr) => {
                   try { return dateStr.split('-')[2]; } catch(e) { return '?'; }
-              }
-
+              };
+              // Isi tabel dengan data penolakan
               rejectedItems.forEach(item => {
                  rejectionHtml += `
                     <tr>
@@ -1766,63 +2013,106 @@
                     </tr>
                  `;
               });
-              
-              // TUTUP WRAPPER DAN CONTAINER
-              rejectionHtml += `</tbody></table></div></div>`; 
-              rejectionWrapper.innerHTML = rejectionHtml; // 3. Masukkan HTML ke wrapper
-              // --- PERUBAHAN SELESAI DI SINI ---
+              rejectionHtml += `</tbody></table></div></div>`;
+              rejectionWrapper.innerHTML = rejectionHtml; // Tampilkan tabel penolakan
           }
-          // --- AKHIR BLOK BARU ---
 
+          // Mulai Membuat HTML Tabel Utama untuk Ceklok
           let tableHTML = '<div class="table-scroll-wrapper"><table><thead><tr><th>Tanggal</th><th>Jam Masuk</th><th>Jam Pulang</th><th>Keterangan</th><th>Aksi</th></tr></thead><tbody>';
 
+          // Loop untuk Setiap Hari dalam Bulan
           for (let day = 1; day <= daysInMonth; day++) {
-            const dateStr = `${currentMonthStr}-${String(day).padStart(2, '0')}`;
-            const dateObj = new Date(year, month - 1, day);
-            const dayOfWeek = dateObj.getDay();
-            const dayName = dateObj.toLocaleString('id-ID', { weekday: 'short' });
-            const isSunday = dayOfWeek === 0;
-            const isHoliday = !!appSettings.holidays[dateStr];
-            const existingData = attendanceData[dateStr];
+            const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`; // YYYY-MM-DD
+            const dateObj = new Date(year, month - 1, day); // Objek Date
+            const dayOfWeek = dateObj.getDay(); // 0 = Minggu
+            const dayName = dateObj.toLocaleString('id-ID', { weekday: 'short' }); // Misal: Sen, Sel
+            const isSunday = dayOfWeek === 0; // Apakah hari Minggu?
+            const isHoliday = !!appSettings.holidays[dateStr]; // Apakah libur nasional?
 
-            let rowClass = '';
-            let aksiButton = '';
-            
-            if (isReqMonth && pendingData[dateStr]) {
-              rowClass = 'pending-row';
-            } else if (isSunday) {
-              rowClass = 'sunday-row';
-            } else if (isHoliday) {
-              rowClass = 'holiday-row';
+            let rowClassList = []; // Untuk menyimpan kelas CSS baris
+            let aksiButton = '';   // Untuk HTML tombol di kolom Aksi
+
+            // Tentukan Kelas CSS Dasar (pending, libur, minggu)
+            if (isReqMonth && pendingData[dateStr]) { // Jika bulan pengajuan & ada ajuan pending tgl ini
+              rowClassList.push('pending-row');
+            } else if (isSunday) { // Jika hari Minggu
+              rowClassList.push('sunday-row');
+            } else if (isHoliday) { // Jika libur nasional
+              rowClassList.push('holiday-row');
             }
 
+            // Tambahkan Kelas CSS Highlight untuk Hari Ini (jika Geo Aktif)
+            if (dateStr === todayStr && isGeoEnabled && !isReqMonth) {
+                // --- AWAL PERUBAHAN BYPASS ---
+                // Jika punya bypass, selalu hijau (allowed)
+                if (hasBypass) {
+                  rowClassList.push('today-row-allowed');
+                } else {
+                  rowClassList.push(isUserInLocation ? 'today-row-allowed' : 'today-row-denied'); // Kelas hijau atau merah
+                }
+                // --- AKHIR PERUBAHAN BYPASS ---
+            }
+
+            // Tentukan apakah input di baris ini harus dinonaktifkan
+            // Baris disabled JIKA:
+            // 1. Bulan ini terkunci (isLocked=true) DAN BUKAN bulan pengajuan (!isReqMonth)
+            // 2. ATAU ini adalah bulan pengajuan (isReqMonth=true)
+            // 3. ATAU (SEMUA KONDISI INI HARUS TERPENUHI):
+            //    a. Geo-lock aktif (isGeoEnabled=true)
+            //    b. Ini hari ini (dateStr === todayStr)
+            //    c. User di luar lokasi (!isUserInLocation)
+            //    d. DAN User TIDAK punya bypass (!hasBypass)
+            let isRowDisabled = (isLocked && !isReqMonth) || isReqMonth || (isGeoEnabled && dateStr === todayStr && !isUserInLocation && !hasBypass);
+
+            // Tentukan Tombol Aksi berdasarkan Kondisi
             if (isSunday || isHoliday) {
-              // Tidak ada aksi
-            } else if (isReqMonth) {
-              if (isRequestPending) {
-                aksiButton = `<button class="action-btn warning edit-btn" disabled>Menunggu</button>`;
-              } else {
-                aksiButton = `<button class="action-btn warning edit-btn" onclick="handleEnableEdit(event)">Ubah</button>`;
-              }
-            } else {
-              aksiButton = `<button class="clear-btn" onclick="handleClearRow(event)" ${isDisabled ? 'disabled' : ''}>Hapus</button>`;
+                // Tidak ada tombol aksi untuk hari libur/Minggu
             }
-
-            const isRowDisabled = isDisabled || isReqMonth;
-
-            if (isHoliday) {
-              tableHTML += `<tr id="row-${dateStr}" class="${rowClass}"><td>${day} <small>(${dayName})</small></td><td colspan="3">${appSettings.holidays[dateStr]}</td><td>${aksiButton}</td></tr>`;
-            } else if (isSunday) {
-              tableHTML += `<tr id="row-${dateStr}" class="${rowClass}"><td>${day} <small>(${dayName})</small></td><td colspan="3">Hari Libur</td><td>${aksiButton}</td></tr>`;
+            // Jika ini bulan pengajuan
+            else if (isReqMonth) {
+                if (isRequestPending) { // Jika sudah ada ajuan pending
+                    aksiButton = `<button class="action-btn warning edit-btn" disabled>Menunggu</button>`; // Tombol nonaktif
+                } else { // Jika belum ada ajuan pending
+                    aksiButton = `<button class="action-btn warning edit-btn" onclick="handleEnableEdit(event)">Ubah</button>`; // Tombol 'Ubah'
+                }
             }
+            // Jika bukan bulan pengajuan
             else {
+                 // Tombol Hapus (status disabled-nya mengikuti isRowDisabled)
+                 aksiButton = `<button class="clear-btn" onclick="handleClearRow(event)" ${isRowDisabled ? 'disabled' : ''}>Hapus</button>`;
+            }
+
+            // Gabungkan semua kelas CSS menjadi satu string
+            const rowClass = rowClassList.join(' ');
+
+            // Buat HTML untuk Baris (tr)
+            if (isHoliday) { // Baris untuk libur nasional
+              tableHTML += `<tr id="row-${dateStr}" class="${rowClass}"><td>${day} <small>(${dayName})</small></td><td colspan="3">${appSettings.holidays[dateStr]}</td><td>${aksiButton}</td></tr>`;
+            } else if (isSunday) { // Baris untuk hari Minggu
+              tableHTML += `<tr id="row-${dateStr}" class="${rowClass}"><td>${day} <small>(${dayName})</small></td><td colspan="3">Hari Libur</td><td>${aksiButton}</td></tr>`;
+            } else { // Baris untuk hari kerja
+              // Input jam masuk, jam pulang, dan pilih alasan. Status disabled berdasarkan isRowDisabled.
               tableHTML += `<tr id="row-${dateStr}" class="${rowClass}"><td>${day} <small>(${dayName})</small></td><td><input type="text" class="time-entry" id="in-${dateStr}" placeholder="HH:MM" maxlength="5" inputmode="numeric" oninput="handleTimeInput(event)" ${isRowDisabled ? 'disabled' : ''}></td><td><input type="text" class="time-entry" id="out-${dateStr}" placeholder="HH:MM" maxlength="5" inputmode="numeric" oninput="handleTimeInput(event)" ${isRowDisabled ? 'disabled' : ''}></td><td><select id="reason-${dateStr}" ${isRowDisabled ? 'disabled' : ''} onchange="handleReasonChange(event)">${reasonOptions}</select></td><td>${aksiButton}</td></tr>`;
             }
-          }
-          tableHTML += '</tbody></table></div>';
-          container.innerHTML = tableHTML;
+          } // Akhir loop hari
 
+          tableHTML += '</tbody></table></div>'; // Tutup tabel dan wrapper
+          container.innerHTML = tableHTML; // Tampilkan tabel ke halaman
+
+          // Isi data absensi yang sudah ada ke input yang baru dibuat
           populateAttendanceData(attendanceData);
+
+          // Scroll otomatis ke baris hari ini (jika bulan berjalan & Geo aktif)
+          const todayRowElement = document.getElementById(`row-${todayStr}`);
+          if (todayRowElement) {
+              const isCurrentDisplayMonth = (year === currentYear && month === currentMonth);
+              if (isGeoEnabled && isCurrentDisplayMonth && !isReqMonth) {
+                  todayRowElement.scrollIntoView({
+                      behavior: 'smooth',
+                      block: 'center'
+                  });
+              }
+          }
       }
 
       function populateAttendanceData(data) {
@@ -1852,10 +2142,7 @@
             // Jika ada data PENDING, tampilkan data pending
             if (checkInInput) checkInInput.value = pendingEntry.newCheckIn;
             
-            // --- AWAL PERBAIKAN TYPO ---
-            // Bug sebelumnya: checkInInput.value = pendingEntry.newCheckOut
             if (checkOutInput) checkOutInput.value = pendingEntry.newCheckOut; 
-            // --- AKHIR PERBAIKAN TYPO ---
 
             if (reasonSelect) {
                 reasonSelect.value = pendingEntry.newReason || "";
@@ -1911,6 +2198,13 @@
 
       function handleSave() {
           const button = document.getElementById('save-button');
+          
+          // --- AWAL TAMBAHAN: Dapatkan Referensi Kontrol ---
+          const requestButton = document.getElementById('request-change-button');
+          const monthNavButtons = document.querySelectorAll('.month-navigator button');
+          const tableControls = document.querySelectorAll('#attendance-table-container input, #attendance-table-container select, #attendance-table-container button');
+          // --- AKHIR TAMBAHAN ---
+
           document.querySelectorAll('#attendance-table-container tr.invalid-row').forEach(row => {
               row.classList.remove('invalid-row');
           });
@@ -1918,6 +2212,12 @@
           const schoolForSave = (currentUser.role === 'staff' && selectedTeacherForStaff) ? selectedTeacherForStaff.school : selectedSchool;
           const targetUser = (currentUser.role === 'staff' && selectedTeacherForStaff) ? selectedTeacherForStaff : currentUser;
           const payload = { email: targetUser.email, name: targetUser.name, school: schoolForSave, attendance: {} };
+
+          // --- AWAL PERUBAHAN BYPASS ---
+          // Tentukan email yang akan digunakan untuk cek bypass di server
+          // Kirim email yang login jika itu staff atau admin
+          const staffEmailBypass = (currentUser.role === 'staff' || currentUser.role === 'admin') ? currentUser.email : null;
+          // --- AKHIR PERUBAHAN BYPASS ---
 
           const rows = document.querySelectorAll('#attendance-table-container tbody tr');
           let validationError = false;
@@ -1932,19 +2232,12 @@
               const checkOutInput = row.querySelector(`#out-${date}`);
               const reasonSelect = row.querySelector('select');
 
-              // Jika tidak ada elemen input 'select' di baris ini,
-              // berarti ini baris info (spt "Hari Libur"), jadi lewati.
               if (!reasonSelect) return; 
 
               const checkIn = checkInInput.value;
               const checkOut = checkOutInput.value;
               const reason = reasonSelect.value;
 
-              // Validasi baru:
-              // Hanya lewati baris jika input jam-nya nonaktif (disabled)
-              // DAN alasan-nya juga kosong.
-              // Ini untuk mengabaikan baris di bulan terkunci, TAPI
-              // tetap memproses baris yang punya "Alasan" (seperti Cuti/Sakit).
               if (checkInInput.disabled && reason.trim() === "") return;
 
               const hasCheckIn = checkIn.trim() !== "";
@@ -1974,25 +2267,43 @@
               return;
           }
 
+          // --- AWAL PERUBAHAN: Nonaktifkan Semua Kontrol ---
           button.disabled = true;
           button.querySelector('span').textContent = "Menyimpan...";
+          if (requestButton) requestButton.disabled = true;
+          monthNavButtons.forEach(btn => btn.disabled = true);
+          tableControls.forEach(ctrl => ctrl.disabled = true);
+          // --- AKHIR PERUBAHAN ---
+
           displayMessage('save-message', 'Menyimpan data...', { isProcessing: true });
 
           google.script.run
               .withSuccessHandler(r => {
                   displayMessage('save-message', r.message, { isSuccess: true });
-                  button.disabled = false;
+                  
+                  // --- PERBAIKAN: Reset teks tombol ---
                   button.querySelector('span').textContent = "Simpan Semua Perubahan";
-                  loadMonthData(currentDate);
+                  // --- AKHIR PERBAIKAN ---
+
+                  loadMonthData(currentDate); 
+                  
+                  monthNavButtons.forEach(btn => btn.disabled = false);
+
                   if (currentUser.role === 'guru') loadAndRenderSummary();
                   else if (currentUser.role === 'staff') loadStaffSummary();
               })
               .withFailureHandler(e => {
                   displayMessage('save-message', "Error: " + e.message);
-                  button.disabled = false;
+                  
+                  // --- PERBAIKAN: Reset teks tombol ---
                   button.querySelector('span').textContent = "Simpan Semua Perubahan";
+                  // --- AKHIR PERBAIKAN ---
+                  
+                  loadMonthData(currentDate);
+                  
+                  monthNavButtons.forEach(btn => btn.disabled = false);
               })
-              .saveMonthlyAttendance(payload);
+              .saveMonthlyAttendance(payload, staffEmailBypass); // <-- Parameter kedua untuk bypass
       }
 
       // --- AWAL FUNGSI BARU UNTUK FITUR PENGAJUAN ---
@@ -2165,6 +2476,10 @@
       function showChangeRequestPage() {
         document.getElementById("staff-dashboard-container").style.display = "none";
         document.getElementById("change-request-container").style.display = "block";
+
+        // --- TAMBAHKAN BARIS INI ---
+        history.pushState(null, null, location.href);
+        // --- AKHIR TAMBAHAN ---
 
         const container = document.getElementById('request-list-container');
         container.innerHTML = `
@@ -2910,6 +3225,11 @@
       function showAllTeacherSummary() {
         document.getElementById("guru-dashboard-container").style.display = "none";
         document.getElementById("all-teachers-summary-container").style.display = "block";
+
+        // --- TAMBAHKAN BARIS INI ---
+        history.pushState(null, null, location.href);
+        // --- AKHIR TAMBAHAN ---
+
         document.getElementById("all-teachers-summary-title").innerText = `Ringkasan Kehadiran - ${selectedSchool}`;
         loadAllTeacherSummaryData();
       }
@@ -3015,8 +3335,11 @@
           document.getElementById("change-request-container").style.display = "none";
           // --- AKHIR PERUBAHAN ---
 
-
           document.getElementById("staff-dashboard-container").style.display = "block";
+
+          // --- TAMBAHKAN BARIS INI ---
+          history.pushState(null, null, location.href);
+          // --- AKHIR TAMBAHAN ---
 
           // MODIFIKASI DIMULAI DI SINI
           const welcomeH2 = document.getElementById('staff-welcome-message');
@@ -3130,21 +3453,54 @@
           return schoolTeachers.find(t => t.email === email);
       }
 
-      function showCeklokPageForStaff(isRedirect = false) {
-          if (!isRedirect) {
-              selectedTeacherForStaff = getSelectedTeacher('staff-teacher-select-ceklok');
-          }
+      /**
+       * (STAFF) Menampilkan halaman Ceklok untuk guru yang dipilih.
+       * @param {boolean} forceReload - (Opsional) Digunakan jika dipanggil setelah
+       * impor EMIS untuk menggunakan guru yang sudah
+       * tersimpan di 'selectedTeacherForStaff'.
+       */
+      function showCeklokPageForStaff(forceReload = false) {
+        // 2. Cek guru yang dipilih
+        if (!forceReload) {
+          // Jika ini BUKAN reload paksa, ambil guru dari dropdown Ceklok
+          selectedTeacherForStaff = getSelectedTeacher('staff-teacher-select-ceklok');
           if (!selectedTeacherForStaff) {
-            displayMessage('staff-ceklok-message', 'Silakan pilih seorang guru terlebih dahulu.');
+            displayMessage('staff-ceklok-message', 'Silakan pilih seorang guru terlebih dahulu untuk mengisi ceklok.');
             return;
           }
+        }
 
-          document.getElementById("staff-dashboard-container").style.display = "none";
-          document.getElementById("emis-import-container").style.display = "none";
-          document.getElementById("ceklok-container").style.display = "block";
-          document.getElementById('ceklok-title').innerText = `Formulir Kehadiran - ${selectedTeacherForStaff.school}`;
-          document.getElementById('ceklok-teacher-name').innerText = `Untuk: ${selectedTeacherForStaff.name}`;
-          loadMonthData(currentDate);
+        // 3. Pastikan (lagi) bahwa ada guru yang terpilih
+        //    (Ini penting untuk kasus 'forceReload' dimana guru harus sudah di-set sebelumnya)
+        if (!selectedTeacherForStaff) {
+           displayMessage('staff-ceklok-message', 'Terjadi kesalahan, guru tidak terpilih. Silakan kembali dan pilih guru.');
+           // Kembalikan ke dasbor jika terjadi error
+           showStaffDashboard();
+           return;
+        }
+
+        // 4. Sembunyikan dasbor staff
+        document.getElementById("staff-dashboard-container").style.display = "none";
+        
+        // 5. Tampilkan halaman Ceklok
+        document.getElementById("ceklok-container").style.display = "block";
+
+        // --- TAMBAHKAN BARIS INI ---
+        history.pushState(null, null, location.href);
+        // --- AKHIR TAMBAHAN ---
+        
+        // 6. Atur judul halaman Ceklok
+        document.getElementById('ceklok-title').innerText = `Formulir Kehadiran - ${selectedTeacherForStaff.school}`;
+        document.getElementById('ceklok-teacher-name').innerText = `Untuk: ${selectedTeacherForStaff.name}`;
+
+        // 7. Bersihkan pesan geo-lock (jika ada)
+        const geoMessage = document.getElementById('geo-lock-message');
+        if (geoMessage) {
+            geoMessage.style.display = 'none';
+        }
+
+        // 8. Muat data absensi untuk guru yang dipilih
+        loadMonthData(currentDate);
       }
 
       function showEmisImportPageForStaff() {
@@ -3156,6 +3512,11 @@
 
           document.getElementById("staff-dashboard-container").style.display = "none";
           document.getElementById("emis-import-container").style.display = "block";
+
+          // --- TAMBAHKAN BARIS INI ---
+          history.pushState(null, null, location.href);
+          // --- AKHIR TAMBAHAN ---
+
           document.getElementById('emis-import-title').innerText = `Import Data Kehadiran EMIS - ${selectedTeacherForStaff.school}`;
           document.getElementById('emis-import-teacher-name').innerText = `Untuk: ${selectedTeacherForStaff.name}`;
       }
@@ -3169,6 +3530,11 @@
 
           document.getElementById("staff-dashboard-container").style.display = "none";
           document.getElementById("emis-export-container").style.display = "block";
+
+          // --- TAMBAHKAN BARIS INI ---
+          history.pushState(null, null, location.href);
+          // --- AKHIR TAMBAHAN ---
+
           document.getElementById('emis-export-title').innerText = `Eksport Data Kehadiran - ${selectedTeacherForStaff.school}`;
           document.getElementById('emis-export-teacher-name').innerText = `Untuk: ${selectedTeacherForStaff.name}`;
       }
@@ -3219,6 +3585,11 @@
         document.getElementById("ceklok-container").style.display = "none";
         document.getElementById("school-selection-container").style.display = "none";
         document.getElementById("admin-container").style.display = "block";
+
+        // --- TAMBAHKAN BARIS INI ---
+        history.pushState(null, null, location.href);
+        // --- AKHIR TAMBAHAN ---
+
         document.getElementById("admin-welcome-message").innerHTML = `Halo Admin, <strong>${currentUser.name}</strong>`;
         loadUsers();
         loadAdminSettings();
@@ -3308,24 +3679,24 @@
         }
       }
 
+      /**
+       * ===================================================================
+       * FUNGSI loadAdminSettings DIMODIFIKASI
+       * ===================================================================
+       * - Memuat dan menampilkan 'opened_months'.
+       */
       function loadAdminSettings() {
-        // Menampilkan pesan loading untuk pengaturan
         displayMessage('announcements-message', 'Memuat...', { isProcessing: true });
         displayMessage('locked-months-message', 'Memuat...', { isProcessing: true });
-        // --- AWAL PERUBAHAN ---
+        displayMessage('opened-months-message', 'Memuat...', { isProcessing: true }); // Pesan loading baru
         displayMessage('request-day-limit-message', 'Memuat...', { isProcessing: true });
-        // --- AKHIR PERUBAHAN ---
         displayMessage('holidays-message', 'Memuat...', { isProcessing: true });
-
-        // ===== TAMBAHKAN BARIS INI =====
-        loadJamRegulerSettings(); 
-        // ===============================
+        loadJamRegulerSettings();
 
         google.script.run.withSuccessHandler(settings => {
           document.getElementById('locked-months').value = settings.lockedMonths.join(',');
-          // --- AWAL PERUBAHAN ---
-          document.getElementById('request-day-limit').value = settings.requestDayLimit || '10'; // Isi input baru
-          // --- AKHIR PERUBAHAN ---
+          document.getElementById('opened-months').value = settings.openedMonths.join(','); // Tampilkan opened_months
+          document.getElementById('request-day-limit').value = settings.requestDayLimit || '10';
           document.getElementById('announcement-input').value = settings.announcements || "";
           const holidaysContainer = document.getElementById('holidays-container');
           holidaysContainer.innerHTML = '';
@@ -3335,9 +3706,8 @@
           // Hapus pesan loading
           displayMessage('announcements-message', '');
           displayMessage('locked-months-message', '');
-          // --- AWAL PERUBAHAN ---
+          displayMessage('opened-months-message', ''); // Hapus pesan loading baru
           displayMessage('request-day-limit-message', '');
-          // --- AKHIR PERUBAHAN ---
           displayMessage('holidays-message', '');
         }).getSettings(currentUser.email);
       }
@@ -3352,10 +3722,21 @@
 
       function saveLockedMonthsSettings() {
         const input = document.getElementById('locked-months').value;
-        const months = input.split(',').map(s => s.trim()).filter(Boolean);
+        const months = input.split(',').map(s => s.trim()).filter(Boolean).filter(m => /^\d{4}-\d{2}$/.test(m)); // Validasi format
         displayMessage('locked-months-message', 'Menyimpan...', { isProcessing: true });
         google.script.run.withSuccessHandler(r => displayMessage('locked-months-message', r.message, { isSuccess: true })).saveLockedMonths(currentUser.email, months);
       }
+
+      // --- FUNGSI BARU UNTUK ADMIN: Menyimpan opened_months ---
+      function saveOpenedMonthsSettings() {
+        const input = document.getElementById('opened-months').value;
+        const months = input.split(',').map(s => s.trim()).filter(Boolean).filter(m => /^\d{4}-\d{2}$/.test(m)); // Validasi format YYYY-MM
+        displayMessage('opened-months-message', 'Menyimpan...', { isProcessing: true });
+        google.script.run.withSuccessHandler(r => {
+            displayMessage('opened-months-message', r.message, { isSuccess: r.status === 'success' });
+        }).saveOpenedMonths(currentUser.email, months);
+      }
+      // --- AKHIR FUNGSI BARU ---
 
       // --- FUNGSI BARU ---
       function saveRequestDayLimitSettings() {
@@ -3609,6 +3990,11 @@
       function showLkhPage() {
         document.getElementById("lkh-sptjm-dashboard-container").style.display = "none";
         document.getElementById("lkh-container").style.display = "block";
+
+        // --- TAMBAHKAN BARIS INI ---
+        history.pushState(null, null, location.href);
+        // --- AKHIR TAMBAHAN ---
+
         const lkhMonthInput = document.getElementById('lkh-month-input');
         if (!lkhMonthInput.value) {
           // --- PERUBAHAN: Logika default bulan berdasarkan tanggal ---
@@ -3760,6 +4146,10 @@
       function showLkhViewPage() {
           document.getElementById('lkh-sptjm-dashboard-container').style.display = 'none';
           document.getElementById('lkh-view-container').style.display = 'block';
+
+          // --- TAMBAHKAN BARIS INI ---
+          history.pushState(null, null, location.href);
+          // --- AKHIR TAMBAHAN ---
 
           // 1. Dapatkan elemen tombol dan pesan
           const downloadButton = document.getElementById('download-lkh-pdf-button');
@@ -4144,6 +4534,337 @@
           })
           .clearSchoolSummaryCache(currentUser.email, selectedSchool, year, month);
       }
+      
+      /**
+       * (MODIFIKASI) Dipanggil jika geolocation BERHASIL.
+       * Mengatur variabel 'isUserInLocation' (untuk kuncian) berdasarkan status GeoEnabled.
+       */
+      function handleGeoSuccess(position) {
+        const userLat = position.coords.latitude;
+        const userLon = position.coords.longitude;
+
+        const schoolLat = currentSchoolSettings.lat;
+        const schoolLon = currentSchoolSettings.lon;
+        const schoolRadius = currentSchoolSettings.radius;
+
+        const isGeoActive = currentSchoolSettings.geoEnabled === true;
+
+        if (schoolLat == null || schoolLon == null) {
+            // Pengaturan sekolah tidak lengkap
+            isUserInLocation = !isGeoActive; // true jika nonaktif, false jika aktif
+            updateGeoStatusUI(null, { message: "Pengaturan lokasi (Lat/Lon) untuk sekolah ini belum lengkap." });
+            return;
+        }
+
+        // Hitung jarak
+        const distance = calculateDistance(userLat, userLon, schoolLat, schoolLon);
+        const realUserInLocation = (distance <= schoolRadius);
+
+        // === KUNCI UNTUK KUNCIA/BUKA CEKLOK ===
+        // Jika geo aktif, gunakan status lokasi asli.
+        // Jika geo nonaktif, PAKSA jadi 'true' (selalu di dalam lokasi / tidak terkunci).
+        isUserInLocation = isGeoActive ? realUserInLocation : true;
+
+        // Kirim jarak asli ke UI
+        updateGeoStatusUI(distance, null); 
+      }
+      
+      /**
+       * (MODIFIKASI) Dipanggil jika geolocation GAGAL.
+       * Mengatur variabel 'isUserInLocation' (untuk kuncian) berdasarkan status GeoEnabled.
+       */
+      function handleGeoError(error) {
+        const isGeoActive = currentSchoolSettings.geoEnabled === true;
+
+        // === KUNCI UNTUK KUNCIA/BUKA CEKLOK ===
+        // Jika geo aktif, status jadi 'false' (terkunci).
+        // Jika geo nonaktif, PAKSA jadi 'true' (tidak terkunci).
+        isUserInLocation = !isGeoActive; 
+
+        updateGeoStatusUI(null, error); // Kirim error ke UI
+      }
+
+      /**
+       * (BARU) Memperbarui kotak status lokasi di DASBOR.
+       * (DIMODIFIKASI untuk menampilkan status HIJAU saat geoDisabled)
+       */
+      function updateGeoStatusUI(distance, error) {
+          const statusBox = document.getElementById('geo-status-box');
+          if (!statusBox) return; // Keluar jika elemen tidak ada
+
+          const msgEl = document.getElementById('geo-status-message');
+          const detailsEl = document.getElementById('geo-status-details');
+          const refreshBtn = document.getElementById('refresh-geo-button');
+
+          const radius = currentSchoolSettings.radius || 0;
+          const isGeoActive = currentSchoolSettings.geoEnabled === true; // Ambil status dari global
+
+          refreshBtn.style.display = 'flex'; // Selalu tampilkan tombol refresh
+
+          if (error) {
+              // Kasus 1: Gagal (GPS error, Izin ditolak, dll)
+              statusBox.className = isGeoActive ? 'card-section danger' : 'card-section success'; // Merah jika aktif, Hijau jika nonaktif
+              msgEl.innerText = isGeoActive ? 'Lokasi Gagal Diverifikasi' : 'Gagal Verifikasi (Nonaktif)';
+
+              let errorMsg = "Gagal mendapatkan lokasi.";
+              if (error.code) {
+                  switch(error.code) {
+                      case error.PERMISSION_DENIED: errorMsg = "Izin lokasi ditolak. Aktifkan di setelan browser."; break;
+                      case error.POSITION_UNAVAILABLE: errorMsg = "Sinyal lokasi tidak tersedia. Coba lagi."; break;
+                      case error.TIMEOUT: errorMsg = "Waktu verifikasi habis. Coba lagi."; break;
+                      default: errorMsg = error.message || errorMsg;
+                  }
+              } else {
+                  errorMsg = error.message || errorMsg; // Handle error non-GPS
+              }
+
+              detailsEl.innerText = isGeoActive ? errorMsg : `${errorMsg} Ceklok tetap dibuka.`;
+
+          } else if (distance !== null) {
+              // Kasus 2: Sukses mendapat lokasi, sekarang cek jarak
+              const realUserInLocation = (distance <= radius);
+
+              if (realUserInLocation) {
+                  // 2a: Di Dalam Jangkauan (Selalu Hijau, sudah benar)
+                  statusBox.className = 'card-section success';
+                  msgEl.innerText = 'Anda Berada di Lokasi';
+                  detailsEl.innerText = `Jarak: ${distance.toFixed(0)} m (Radius: ${radius} m) dari titik lokasi sekolah. Ceklok dibuka.`;
+              } else {
+                  // 2b: Di Luar Jangkauan
+                  const distanceKm = (distance / 1000).toFixed(2);
+
+                  // INI LOGIKA BARU ANDA:
+                  statusBox.className = isGeoActive ? 'card-section danger' : 'card-section success'; // Merah jika aktif, HIJAU jika nonaktif
+                  msgEl.innerText = isGeoActive ? 'Anda di Luar Jangkauan' : 'Anda di Luar Jangkauan (Nonaktif)';
+                  detailsEl.innerText = isGeoActive ? 
+                      `Jarak: ${distanceKm} km (Radius: ${radius} m) dari titik lokasi sekolah. Ceklok hari ini dikunci.` : 
+                      `Jarak: ${distanceKm} km (Radius: ${radius} m) dari titik lokasi sekolah. Ceklok tetap dibuka.`; // Pesan berbeda
+              }
+          }
+
+          // --- AWAL PERUBAHAN (Cooldown Tombol Refresh) ---
+          // (Logika ini tidak berubah)
+          setTimeout(() => {
+            if(refreshBtn) {
+              refreshBtn.disabled = false; 
+            }
+          }, 5000); // 5000ms = 5 detik
+          // --- AKHIR PERUBAHAN ---
+      }
+
+      /**
+       * (BARU) Rumus Haversine untuk menghitung jarak antara 2 titik lat/lon.
+       * Mengembalikan jarak dalam METER.
+       */
+      function calculateDistance(lat1, lon1, lat2, lon2) {
+          const R = 6371e3; // Radius bumi dalam meter
+          const φ1 = lat1 * Math.PI/180; // φ, λ in radians
+          const φ2 = lat2 * Math.PI/180;
+          const Δφ = (lat2-lat1) * Math.PI/180;
+          const Δλ = (lon2-lon1) * Math.PI/180;
+
+          const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                    Math.cos(φ1) * Math.cos(φ2) *
+                    Math.sin(Δλ/2) * Math.sin(Δλ/2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+          const d = R * c; // dalam meter
+          return d;
+      }
+
+      /**
+       * (MODIFIKASI) Fungsi utama untuk memulai pengecekan geolokasi di DASBOR.
+       * Versi ini SECARA AKTIF MENGHAPUS CACHE server terlebih dahulu.
+       */
+      function runDashboardGeoCheck() {
+          if (!currentUser) return; 
+
+          const statusBox = document.getElementById('geo-status-box');
+          if (!statusBox) return; // Keluar jika tidak di dasbor guru
+
+          // 1. Set UI ke status loading (langkah pertama)
+          statusBox.style.display = 'block';
+          statusBox.className = 'card-section processing';
+          document.getElementById('geo-status-message').innerText = 'Memperbarui pengaturan...';
+          document.getElementById('geo-status-details').innerText = 'Menghapus cache dan mengambil setelan terbaru...';
+          document.getElementById('refresh-geo-button').disabled = true;
+
+          // Dapatkan token dari localStorage
+          const token = localStorage.getItem('ceklokAuthToken');
+
+          // 2. Panggil fungsi BARU untuk menghapus cache di server
+          google.script.run
+              .withSuccessHandler(clearResponse => {
+                  
+                  if (clearResponse && clearResponse.success) {
+                      console.log("Cache pengaturan sekolah berhasil dihapus.");
+                  } else {
+                      console.warn("Gagal menghapus cache, mungkin menampilkan data lama.");
+                  }
+
+                  // 3. SETELAH cache dihapus (baik sukses atau gagal),
+                  //    LANJUTKAN ke panggilan untuk mengambil data baru (diekstrak ke runFallbackGeoCheck).
+                  runFallbackGeoCheck();
+
+              })
+              .withFailureHandler(clearError => {
+                  // Jika panggilan hapus cache GAGAL TOTAL (jarang terjadi)
+                  console.error("Gagal total menghubungi server untuk hapus cache:", clearError.message);
+                  // Tetap jalankan proses utama
+                  // (Ini akan mengambil dari cache, tapi lebih baik daripada tidak sama sekali)
+                  runFallbackGeoCheck();
+              })
+              .clearSchoolSettingsCacheManual(token); // Panggil fungsi baru di server
+      }
+
+      /**
+       * (FUNGSI HELPER BARU)
+       * Ini adalah logika inti pengecekan geo, dipanggil SETELAH cache dihapus.
+       */
+      function runFallbackGeoCheck() {
+          const dummyDate = new Date();
+          google.script.run
+              // !!! PASTIKAN 'response' ADA DI SINI !!!
+              .withSuccessHandler(response => { 
+                  
+                  // Baris ini (atau di sekitarnya) adalah tempat error Anda terjadi
+                  if (response && response.error) {
+                      handleGeoError({ code: -1, message: "Gagal mengambil pengaturan: " + response.error });
+                      return;
+                  }
+
+                  // SUKSES: Perbarui variabel global dengan pengaturan BARU dari server
+                  currentSchoolSettings = response.schoolSettings || {};
+
+                  // Lanjutkan ke pengecekan GPS
+                  document.getElementById('geo-status-message').innerText = 'Sedang memverifikasi lokasi Anda...';
+                  document.getElementById('geo-status-details').innerText = 'Pastikan GPS dan izin lokasi aktif.';
+
+                  if ("geolocation" in navigator) {
+                      navigator.geolocation.getCurrentPosition(
+                          handleGeoSuccess, // Panggil fungsi global
+                          handleGeoError,   // Panggil fungsi global
+                          {
+                              enableHighAccuracy: false, 
+                              timeout: 15000, 
+                              maximumAge: 0  
+                          }
+                      );
+                  } else {
+                      // Kirim error buatan jika browser tidak support
+                      handleGeoError({ code: -1, message: "Browser tidak mendukung Geolocation." });
+                  }
+              })
+              .withFailureHandler(error => {
+                  // Gagal menghubungi server
+                  handleGeoError({ code: -1, message: "Error server: " + error.message });
+              })
+              .getAttendancePageData(currentUser.email, selectedSchool, dummyDate.getFullYear(), dummyDate.getMonth() + 1, 0);
+      }
+
+      /**
+       * (MODIFIKASI) Memulai polling untuk memeriksa perubahan pengaturan server.
+       * Hanya dipanggil sekali saat dasbor guru dimuat.
+       */
+      function startSettingsPolling() {
+        // Hentikan polling lama jika ada
+        if (settingsPollInterval) {
+          clearInterval(settingsPollInterval);
+          settingsPollInterval = null;
+        }
+
+        // Mulai polling baru setiap 30 detik (30000 ms)
+        settingsPollInterval = setInterval(() => {
+          // 1. Pastikan kita masih di dasbor guru dan ada user
+          if (!currentUser || !selectedSchool || document.getElementById('guru-dashboard-container').style.display !== 'block') {
+            // Jika tidak, hentikan polling
+            clearInterval(settingsPollInterval);
+            settingsPollInterval = null;
+            return;
+          }
+
+          // 2. Panggil fungsi server yang ringan
+          google.script.run
+            .withSuccessHandler(response => {
+              if (response.success) {
+                const newSettings = response.settings;
+
+                // 3. Bandingkan dengan pengaturan 'currentSchoolSettings' yang ada
+                if (hasSettingsChanged(currentSchoolSettings, newSettings)) {
+                  
+                  // === AWAL PERUBAHAN INTI ===
+                  console.log("Deteksi perubahan pengaturan server. Memperbarui UI...");
+
+                  // a. Perbarui pengaturan global
+                  currentSchoolSettings = newSettings; 
+
+                  // b. Panggil fungsi refresh UI (BUKAN runDashboardGeoCheck)
+                  refreshGeoUI(); 
+                  // === AKHIR PERUBAHAN INTI ===
+                  
+                } else {
+                   // console.log("Pengaturan server masih sama."); // (Bisa di-uncomment untuk debugging)
+                }
+              }
+            })
+            .withFailureHandler(err => {
+              console.error("Gagal polling pengaturan: ", err.message);
+            })
+            .getLatestSchoolSettings(currentUser.email, selectedSchool);
+
+        }, 30000); // Poll setiap 30 detik
+      }
+
+      /**
+       * (BARU) Fungsi helper untuk membandingkan dua objek pengaturan.
+       * @return {boolean} true jika ada perbedaan, false jika sama.
+       */
+      function hasSettingsChanged(oldSettings, newSettings) {
+        if (!oldSettings || !newSettings) return true; // Anggap berubah jika salah satu tidak ada
+
+        return (
+          oldSettings.geoEnabled !== newSettings.geoEnabled ||
+          oldSettings.lat !== newSettings.lat ||
+          oldSettings.lon !== newSettings.lon ||
+          oldSettings.radius !== newSettings.radius
+        );
+      }
+
+      /**
+       * (BARU) Fungsi UI-only untuk me-refresh status geo.
+       * Menggunakan var global 'currentSchoolSettings' dan 'isUserInLocation'.
+       * TIDAK memanggil server untuk settings.
+       */
+      function refreshGeoUI() {
+          console.log("Pengaturan berubah. Menjalankan ulang pemeriksaan lokasi...");
+
+          const statusBox = document.getElementById('geo-status-box');
+          if (!statusBox || document.getElementById('guru-dashboard-container').style.display !== 'block') {
+              return; // Hanya berjalan jika di dasbor guru
+          }
+          
+          // 1. Set UI ke status loading
+          statusBox.className = 'card-section processing';
+          document.getElementById('geo-status-message').innerText = 'Memverifikasi ulang lokasi...';
+          document.getElementById('geo-status-details').innerText = 'Menggunakan pengaturan baru...';
+          document.getElementById('refresh-geo-button').disabled = true; // Nonaktifkan tombol refresh saat sedang refresh
+
+          // 2. Jalankan pengecekan GPS
+          if ("geolocation" in navigator) {
+              navigator.geolocation.getCurrentPosition(
+                  handleGeoSuccess, // Panggil fungsi global
+                  handleGeoError,   // Panggil fungsi global
+                  {
+                      enableHighAccuracy: false, 
+                      timeout: 15000, 
+                      maximumAge: 0  
+                  }
+              );
+          } else {
+              handleGeoError({ code: -1, message: "Browser tidak mendukung Geolocation." });
+          }
+      }
+
     </script>
   </body>
 </html>
